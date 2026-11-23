@@ -3,9 +3,10 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 dan Fase 1 selesai.** Scaffold, design token Glass Stage, katalog
-> komponen, CI, dan RingWidget lima status dengan animasi 60 fps sudah jalan.
-> Kamera, gestur, overlay, dan agen menyusul per fase.
+> **Status: Fase 0 sampai Fase 2 selesai.** Scaffold, design token Glass Stage, katalog
+> komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
+> filter One-Euro, kursor 28 px, indikator kamera, dan jeda Ctrl+Alt+G sudah
+> jalan. Mesin gestur, overlay, dan agen menyusul per fase.
 
 ## Prinsip produk
 
@@ -26,9 +27,19 @@ jarvis_hands/
     state.py              # Status: idle, listening, thinking, speaking, senyap
     config.py             # konfigurasi tervalidasi, JSON atomik
     bus.py                # signal/slot internal (tanpa jaringan)
+    hotkey.py             # Ctrl+Alt+G; pynput global atau fallback Qt
+  vision/
+    camera.py             # kamera + pelacakan di QThread, throttle CPU
+    tracker.py            # pembungkus MediaPipe Hand Landmarker
+    filters.py            # One-Euro filter 1D/2D
+    cursor.py             # landmark -> kursor layar + histeresis cubit
+    session.py            # kamera + hotkey + indikator dalam satu API
+  assets/models/
+    hand_landmarker.task  # model resmi Google (Apache-2.0)
   ui/
     tokens.py             # warna, kaca, huruf, metrik
-    catalog.py            # halaman uji semua komponen (Fase 0)
+    catalog.py            # halaman uji semua komponen (Fase 0-2)
+    camera.py             # CameraIndicator: aktif/jeda/mati/error
   tests/                  # pytest + pytest-qt
 tools/headless_qt/        # stub Qt untuk container tanpa libGL (dev saja)
 .github/workflows/ci.yml  # ruff, mypy, pytest (Linux 3.11/3.12 + Windows)
@@ -76,8 +87,10 @@ py -3.11 -m venv .venv
 .venv\Scripts\python -m jarvis_hands
 ```
 
-Aplikasi Fase 0 membuka **katalog komponen** (jendela pengembang, bukan overlay
-produk). Flag `--config`, `--high-contrast`, dan `--version` tersedia.
+Aplikasi masih membuka **katalog komponen** (jendela pengembang, bukan overlay
+produk). Katalog kini memperlihatkan indikator kamera empat state dan kursor
+28 px. API kamera belum dihubungkan ke jendela overlay (Fase 5). Flag
+`--config`, `--high-contrast`, dan `--version` tersedia.
 
 ## Tes dan kualitas
 
@@ -93,9 +106,14 @@ make check          # ruff + ruff format + mypy + pytest
 
 Tes UI memakai `QT_QPA_PLATFORM=offscreen`. Di Linux tanpa `libGL` (container
 minimal), `tests/conftest.py` otomatis membangun stub di `.qt-stubs/` lewat
-`tools/headless_qt/build.py`; di desktop normal, Windows, dan macOS jalur itu
-tidak aktif. Wheel PySide6 6.11.3 tidak menyertakan penanda `py.typed`, jadi
-`make typecheck` menjalankan `tools/pyside6_typing.py` sebelum mypy.
+`tools/headless_qt/build.py`, termasuk stub `libGLESv2.so.2` untuk MediaPipe;
+di desktop normal, Windows, dan macOS jalur itu tidak aktif. Wheel PySide6
+6.11.3 tidak menyertakan penanda `py.typed`, jadi `make typecheck` menjalankan
+`tools/pyside6_typing.py` sebelum mypy.
+
+Tes kamera memakai sumber frame dan tracker tiruan agar deterministik. Ada satu
+tes integrasi yang memuat model Hand Landmarker asli di QThread dan memeriksa
+SHA-256 bundel `hand_landmarker.task`; jalannya butuh ±1 detik.
 
 ## Design token Glass Stage
 
@@ -134,8 +152,9 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 - Tidak ada modul runtime yang mengimpor `socket`, `http.server`, atau Qt Network;
   tes `test_security.py` memblokir pola tersebut lewat AST.
 - Tidak ada `eval`, `exec`, `pickle`, `marshal`, atau `shelve` di runtime.
-- Kamera belum aktif di Fase 0. Nanti frame tidak pernah ditulis ke disk
-  (`cv2.imwrite`/`VideoWriter` juga dijaga tes).
+- Modul kamera hanya memproses frame di memori; tidak ada `cv2.imwrite`,
+  `VideoWriter`, atau penyimpanan frame. `HandTracker` memuat model dari
+  `assets/models`, bukan dari jaringan.
 - Konfigurasi JSON divalidasi ketat; `memory_root` harus folder yang sudah ada.
   Path traversal/symlink akan ditangani di TreePane (Fase 4).
 - Tidak ada telemetri; `telemetry_consent` default `false`.
@@ -146,7 +165,7 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 | --- | --- | --- |
 | 0 | Scaffold, token, katalog komponen, CI | **Selesai** |
 | 1 | RingWidget lima status + animasi 60 fps | **Selesai** |
-| 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | Belum |
+| 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | **Selesai** |
 | 3 | Mesin gestur + fixture landmark | Belum |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | Belum |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | Belum |
@@ -163,9 +182,18 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 - Orb, Card, TreePane, Overlay, dan Settings belum diimplementasikan; katalog
   menampilkan kartu "TERJADWAL" bertanda fase, bukan tiruan.
 - Mediapipe 1.2.3 adalah major baru (classifier Alpha). `HandLandmarker` sudah
-  diverifikasi bisa diimpor, tetapi pipeline kamera end-to-end baru diuji di Fase 2.
+  diverifikasi end-to-end di QThread dengan model resmi; pada CPU uji 2 core
+  Xeon 2.6 GHz inferensi ±14 ms, sehingga throttle otomatis menahan laju analisis
+  di ±15 fps agar CPU tetap < 25% satu core. Mesin desktop yang lebih cepat akan
+  naik ke 30 fps; `camera.analysis_fps` dan `camera.max_cpu_percent` bisa diatur.
+- Wheel mediapipe 1.2.3 tidak membawa file model `.task`. Model resmi Google
+  dibundel di `assets/models/hand_landmarker.task` (Apache-2.0, SHA-256 dicatat
+  di `assets/models/README.md`).
+- `pynput` hanya dipasang di non-Linux. Di Linux tanpa pynput, Ctrl+Alt+G memakai
+  fallback Qt yang hanya bekerja saat aplikasi memegang fokus; jalur tanpa gestur
+  tetap tersedia lewat pemanggilan `CameraSession.toggle()`/tombol UI.
 - RingWidget sudah punya kontrol status tiruan di katalog, tetapi belum terhubung ke
-  bridge agen (Fase 6) atau kamera (Fase 2).
+  bridge agen (Fase 6) atau kamera (Fase 5).
 - Belum diuji di Windows 10/11 bersih; CI Windows menjalankan pytest, uji packaging
   dan uji mesin bersih ada di Fase 8.
 - Space Grotesk tidak dibundel; tampilan memakai fallback bila font tidak terpasang.
@@ -177,4 +205,6 @@ Implementasi ditulis dari nol. Konsep terinspirasi proyek open source
 yang disalin. **Lisensi proyek ini belum ditetapkan** — silakan pilih (misalnya
 AGPL-3.0 jika ingin konsisten dengan inspirasi, atau lisensi lain) sebelum
 publikasi. Dependensi pihak ketiga: PySide6 (LGPLv3), mediapipe/OpenCV
-(Apache-2.0), numpy (BSD-3), pynput (LGPL-3.0).
+(Apache-2.0), numpy (BSD-3), pynput (LGPL-3.0). Model Hand Landmarker yang
+dibundel berlisensi Apache-2.0; salinan lisensi ada di
+`jarvis_hands/assets/models/LICENSE`.
