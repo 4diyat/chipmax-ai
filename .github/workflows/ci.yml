@@ -35,6 +35,11 @@ jobs:
       - name: Sinkron dependensi terkunci
         run: uv sync --frozen --extra dev
 
+      - name: Periksa requirements.txt sesuai lockfile
+        run: |
+          uv export --locked --no-dev --no-emit-project --no-hashes --output-file requirements.txt
+          git diff --exit-code -- requirements.txt
+
       - name: Ruff
         run: uv run ruff check .
 

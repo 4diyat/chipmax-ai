@@ -92,9 +92,12 @@ uv run jarvis-hands
 
 ### venv + pip
 
+Dari folder repositori, instal dependensi aplikasi yang dikunci dalam
+`requirements.txt` (Python 3.11 atau 3.12):
+
 ```bash
 python3.11 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+.venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m jarvis_hands
 ```
 
@@ -102,9 +105,15 @@ Windows:
 
 ```powershell
 py -3.11 -m venv .venv
-.venv\Scripts\pip install -e ".[dev]"
+.venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m jarvis_hands
 ```
+
+File tersebut hanya mencakup dependensi runtime, bukan paket proyek atau alat
+pengembangan. Untuk tes/lint dan perintah `jarvis-hands`, pasang proyek beserta
+extra pengembangan dengan `.venv/bin/python -m pip install -e ".[dev]"` (di
+Windows gunakan `.venv\Scripts\python`). Setelah `uv.lock` berubah, perbarui
+file dengan `uv export --locked --no-dev --no-emit-project --no-hashes --output-file requirements.txt`.
 
 Aplikasi membuka **jendela kontrol** dan jendela tampilan. Kamera **mati secara
 bawaan**: tekan *Nyalakan kamera* untuk mulai dan *Matikan kamera* untuk berhenti.
