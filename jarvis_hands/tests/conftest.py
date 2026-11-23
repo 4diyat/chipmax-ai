@@ -33,6 +33,7 @@ def _preload_headless_qt() -> None:
         for name in (
             "libGL.so.1",
             "libEGL.so.1",
+            "libGLESv2.so.2",
             "libxkbcommon.so.0",
             "libdbus-1.so.3",
         ):

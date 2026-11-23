@@ -24,6 +24,7 @@ DEFAULT_OUT = ROOT / ".qt-stubs"
 TARGETS: tuple[tuple[str, str, str | None], ...] = (
     ("libGL.so.1", "stub_gl.c", None),
     ("libEGL.so.1", "stub_gl.c", None),
+    ("libGLESv2.so.2", "stub_gles.c", None),
     ("libxkbcommon.so.0", "stub_xkb.c", "xkb.map"),
     ("libdbus-1.so.3", "stub_dbus.c", "dbus.map"),
 )

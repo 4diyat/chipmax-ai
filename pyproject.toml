@@ -57,7 +57,12 @@ include = ["jarvis_hands*"]
 exclude = ["jarvis_hands.tests*"]
 
 [tool.setuptools.package-data]
-jarvis_hands = ["py.typed"]
+jarvis_hands = [
+  "py.typed",
+  "assets/models/*.task",
+  "assets/models/LICENSE",
+  "assets/models/README.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["jarvis_hands/tests"]
