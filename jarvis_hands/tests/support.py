@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
+from pathlib import Path
+
 from jarvis_hands.vision.tracker import HandObservation, Landmark, TrackingResult
 
-__all__ = ["make_hand", "make_result"]
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "landmarks"
+
+__all__ = ["FIXTURE_DIR", "load_fixture", "make_hand", "make_result", "make_result_multi"]
 
 
 def make_hand(
@@ -50,3 +56,57 @@ def make_result(
         width=width,
         height=height,
     )
+
+
+def make_result_multi(
+    hands: Sequence[HandObservation],
+    *,
+    width: int = 640,
+    height: int = 360,
+    timestamp_ms: int = 0,
+) -> TrackingResult:
+    """Bangun hasil pelacakan berisi beberapa tangan."""
+    return TrackingResult(
+        hands=tuple(hands),
+        timestamp_ms=timestamp_ms,
+        width=width,
+        height=height,
+    )
+
+
+def load_fixture(name: str) -> list[TrackingResult]:
+    """Muat fixture landmark JSON menjadi urutan TrackingResult."""
+    path = FIXTURE_DIR / f"{name}.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"fixture landmark tidak ditemukan: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    width = int(data["width"])
+    height = int(data["height"])
+    results: list[TrackingResult] = []
+    for frame in data["frames"]:
+        hands: list[HandObservation] = []
+        for raw in frame["hands"]:
+            points = tuple(
+                Landmark(
+                    x=float(point[0]),
+                    y=float(point[1]),
+                    z=float(point[2]) if len(point) > 2 else 0.0,
+                )
+                for point in raw["landmarks"]
+            )
+            hands.append(
+                HandObservation(
+                    landmarks=points,
+                    handedness=str(raw.get("handedness", "Right")),
+                    score=float(raw.get("score", 0.9)),
+                )
+            )
+        results.append(
+            TrackingResult(
+                hands=tuple(hands),
+                timestamp_ms=int(frame["t"]),
+                width=width,
+                height=height,
+            )
+        )
+    return results
