@@ -115,6 +115,13 @@ extra pengembangan dengan `.venv/bin/python -m pip install -e ".[dev]"` (di
 Windows gunakan `.venv\Scripts\python`). Setelah `uv.lock` berubah, perbarui
 file dengan `uv export --locked --no-dev --no-emit-project --no-hashes --output-file requirements.txt`.
 
+### Skrip untuk menjalankan
+
+Setelah virtual environment dan dependensi terpasang seperti di atas, gunakan
+`run.bat` di Windows (bisa diklik dua kali) atau `./run.sh` di Linux/macOS.
+Skrip tidak menginstal paket secara otomatis. Argumen aplikasi juga diteruskan,
+misalnya `run.bat --mode mirror` atau `./run.sh --catalog`.
+
 Aplikasi membuka **jendela kontrol** dan jendela tampilan. Kamera **mati secara
 bawaan**: tekan *Nyalakan kamera* untuk mulai dan *Matikan kamera* untuk berhenti.
 Tombol kontrol juga dapat membuka memori, mengembalikan kartu, menjeda gestur,
