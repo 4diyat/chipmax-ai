@@ -194,10 +194,10 @@ class CameraWorker(QObject):
         """Buka kamera, jalankan pelacakan, lalu keluar saat diminta."""
         source = self._source_factory()
         tracker: HandTracker | None = None
-        self._active = True
-        self.running_changed.emit(True)
         try:
             source.open()
+            self._active = True
+            self.running_changed.emit(True)
             tracker = self._tracker_factory()
             self._loop(source, tracker)
         except (CameraError, TrackerError) as exc:
@@ -307,7 +307,10 @@ class CameraController(QObject):
     def start(self) -> bool:
         """Nyalakan kamera. Return False bila sudah menyala."""
         if self._thread is not None:
-            return False
+            if not self._thread.isFinished():
+                return False
+            self._thread = None
+            self._worker = None
         self._last_error = ""
         thread = QThread()
         thread.setObjectName("jarvis-camera")
@@ -336,14 +339,15 @@ class CameraController(QObject):
         worker = self._worker
         if thread is None or worker is None:
             return True
-        worker.stop()
-        worker.set_paused(False)
-        thread.quit()
+        if not thread.isFinished():
+            worker.stop()
+            worker.set_paused(False)
+            thread.quit()
         finished = thread.wait(timeout_ms)
         if finished:
             self._thread = None
             self._worker = None
-        if self._active:
+        if finished and self._active:
             self._active = False
             self.active_changed.emit(False)
         return finished
@@ -370,6 +374,8 @@ class CameraController(QObject):
 
     @Slot(bool)
     def _on_running_changed(self, running: bool) -> None:
+        if running and (self._thread is None or self._thread.isFinished()):
+            return
         if running == self._active:
             return
         self._active = running

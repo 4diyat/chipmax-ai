@@ -1,9 +1,4 @@
-"""Titik masuk aplikasi: argumen CLI, QApplication, dan wiring katalog.
-
-Fase 0-2 masih membuka halaman katalog. Flag mode tampil (``--mode``, ``--key``)
-ditambahkan di Fase 5 saat ketiga mode benar-benar tersedia; di sini sengaja
-tidak ada flag mati.
-"""
+"""Titik masuk aplikasi: argumen CLI, kontrol lokal, overlay, dan katalog."""
 
 from __future__ import annotations
 
@@ -20,17 +15,21 @@ from jarvis_hands import __version__
 from jarvis_hands.core.config import (
     AppConfig,
     ConfigError,
+    DisplayMode,
     load_config,
+    parse_key_color,
     with_display_overrides,
 )
+from jarvis_hands.memory.tree import MemoryPathError
 from jarvis_hands.ui.catalog import CatalogWindow
+from jarvis_hands.ui.overlay import ControlWindow
 from jarvis_hands.ui.tokens import apply_theme, build_theme
 
 __all__ = ["build_parser", "main"]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Parser CLI Fase 0-2."""
+    """Parser CLI."""
     parser = argparse.ArgumentParser(
         prog="jarvis-hands",
         description="JARVIS Ring & Hands - antarmuka kaca gestur tangan.",
@@ -47,6 +46,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="paksa tema kontras tinggi",
     )
+    parser.add_argument(
+        "--mode",
+        choices=[mode.value for mode in DisplayMode],
+        default=None,
+        help="mode mirror, overlay, atau key",
+    )
+    parser.add_argument("--key", default=None, help="magenta, green, blue, atau #RRGGBB")
+    parser.add_argument("--monitor", type=int, default=0, help="indeks monitor (mulai dari 0)")
+    parser.add_argument("--camera", action="store_true", help="aktifkan kamera saat mulai")
+    parser.add_argument("--catalog", action="store_true", help="buka katalog komponen")
     return parser
 
 
@@ -55,8 +64,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         config = load_config(args.config) if args.config is not None else AppConfig.default()
-        if args.high_contrast:
-            config = with_display_overrides(config, high_contrast=True)
+        config = with_display_overrides(
+            config,
+            mode=DisplayMode(args.mode) if args.mode else None,
+            key=parse_key_color(args.key) if args.key else None,
+            high_contrast=True if args.high_contrast else None,
+        )
     except ConfigError as exc:
         print(f"jarvis-hands: konfigurasi tidak valid: {exc}", file=sys.stderr)
         return 2
@@ -71,8 +84,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         app = QApplication([sys.argv[0]])
     _configure(app, config)
 
-    window = CatalogWindow(config=config)
+    if args.catalog:
+        catalog = CatalogWindow(config=config)
+        catalog.show()
+        return app.exec()
+    screens = app.screens()
+    if args.monitor < 0 or args.monitor >= len(screens):
+        print(f"jarvis-hands: monitor {args.monitor} tidak tersedia", file=sys.stderr)
+        return 2
+    try:
+        window = ControlWindow(config, screens, monitor=args.monitor)
+    except MemoryPathError as exc:
+        print(f"jarvis-hands: memori tidak tersedia: {exc}", file=sys.stderr)
+        return 2
     window.show()
+    if args.camera:
+        window.session.start()
     return app.exec()
 
 

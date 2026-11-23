@@ -143,7 +143,9 @@ COMPONENTS: Final[tuple[ComponentSpec, ...]] = (
         lambda t: TreePane(theme=t),
         True,
     ),
-    ComponentSpec("overlay", "OverlayWindow", 5, "Overlay transparan, tembus klik, multi-monitor"),
+    ComponentSpec(
+        "overlay", "OverlayWindow", 5, "Overlay transparan, tembus klik, multi-monitor", ready=True
+    ),
     ComponentSpec("settings", "Settings", 7, "Layar pengaturan dan onboarding kamera"),
 )
 

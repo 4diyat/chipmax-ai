@@ -110,10 +110,12 @@ class CameraSession(QObject):
     def stop(self) -> bool:
         """Matikan kamera dan hotkey."""
         stopped = self._controller.stop()
-        self._hotkey.stop()
+        if self._hotkey.is_listening:
+            self._hotkey.stop()
         if self._paused:
             self._paused = False
             self.paused_changed.emit(False)
+        self._hotkey.set_paused(False)
         return stopped
 
     def set_paused(self, paused: bool) -> None:
@@ -122,6 +124,7 @@ class CameraSession(QObject):
         if not self._active or paused == self._paused:
             return
         self._paused = paused
+        self._hotkey.set_paused(paused)
         self._controller.set_paused(paused)
         self._sync_indicators()
         self.paused_changed.emit(paused)
@@ -139,13 +142,19 @@ class CameraSession(QObject):
 
     def _on_active_changed(self, active: bool) -> None:
         self._active = bool(active)
+        if not active and self._hotkey.is_listening:
+            self._hotkey.stop()
         if not active and self._paused:
             self._paused = False
             self.paused_changed.emit(False)
+        if not active:
+            self._hotkey.set_paused(False)
         self._sync_indicators()
         self.active_changed.emit(self._active)
 
     def _on_error(self, message: str) -> None:
+        if self._hotkey.is_listening:
+            self._hotkey.stop()
         for indicator in self._indicators:
             indicator.set_error()
         self.error.emit(message)

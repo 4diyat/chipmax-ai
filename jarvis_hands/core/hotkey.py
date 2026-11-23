@@ -111,7 +111,7 @@ class PynputBackend:
         if self._spec.shift:
             combo += "<shift>+"
         combo += self._spec.key
-        listener = keyboard.GlobalHotKeyListener({combo: on_activate})
+        listener = keyboard.GlobalHotKeys({combo: on_activate})
         listener.daemon = True
         listener.start()
         self._listener = listener

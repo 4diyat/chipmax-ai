@@ -3,12 +3,12 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 sampai Fase 4 selesai.** Scaffold, design token Glass Stage, katalog
+> **Status: Fase 0 sampai Fase 5 selesai.** Scaffold, design token Glass Stage, katalog
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
 > filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
 > gestur dengan fixture landmark, Card, Panel, Orb, dan TreePane sudah jalan.
-> Overlay, agen, dan pengaturan
-> menyusul per fase.
+> Overlay tiga mode dan integrasi kamera–gestur sudah tersedia. Bridge agen dan
+> pengaturan menyusul per fase.
 
 ## Prinsip produk
 
@@ -47,6 +47,7 @@ jarvis_hands/
     card.py / glass.py    # Card, Panel, dan chrome kaca bersama
     physics.py / orb.py   # pegas teredam dan Orb lima status
     treepane.py           # UI pohon memori dan pratinjau baca-saja
+    overlay.py            # tiga mode, kontrol, perutean gestur dan monitor
   memory/tree.py          # pembaca folder memori dan batas keamanan
     camera.py             # CameraIndicator: aktif/jeda/mati/error
   tests/                  # pytest + pytest-qt
@@ -97,10 +98,30 @@ py -3.11 -m venv .venv
 .venv\Scripts\python -m jarvis_hands
 ```
 
-Aplikasi masih membuka **katalog komponen** (jendela pengembang, bukan overlay
-produk). Katalog memperlihatkan indikator kamera, kursor, dan komponen Fase 4;
-TreePane di katalog menggunakan data contoh, bukan folder pengguna. API kamera belum dihubungkan ke jendela overlay (Fase 5). Flag
-`--config`, `--high-contrast`, dan `--version` tersedia.
+Aplikasi membuka **jendela kontrol** dan jendela tampilan. Kamera **mati secara
+bawaan**: tekan *Nyalakan kamera* untuk mulai dan *Matikan kamera* untuk berhenti.
+Tombol kontrol juga dapat membuka memori, mengembalikan kartu, menjeda gestur,
+dan keluar. Ctrl+Alt+G menjeda/melanjutkan; pada Linux tanpa pynput, pintasan
+Qt hanya aktif saat aplikasi memiliki fokus.
+
+```bash
+python -m jarvis_hands --mode overlay      # transparan, tidak menerima klik/fokus
+python -m jarvis_hands --mode mirror       # frame kamera dalam memori
+python -m jarvis_hands --mode key --key green  # latar chroma key
+python -m jarvis_hands --mode key --key '#123456' --monitor 1
+python -m jarvis_hands --camera            # secara eksplisit nyalakan saat mulai
+python -m jarvis_hands --catalog           # katalog komponen pengembang
+```
+
+Mode dan monitor dapat diganti lewat jendela kontrol. Monitor bernomor mulai 0;
+koordinat menggunakan piksel logis Qt, termasuk origin negatif. Mode cermin dan
+key menerima input mouse; mode overlay meneruskan klik ke aplikasi di bawahnya,
+dan gestur dirutekan langsung ke komponen JARVIS. Tap kartu membuka memori,
+tahan kartu membuka memori, seret memindahkan kartu/panel, dan tap tutup menutup
+komponen. Di pohon, tap baris memilih dan membuka/menutup folder. Gestur dua
+tangan, clap, scrub, dan explode diterbitkan sebagai sinyal `gesture`; belum
+diberi aksi produk sampai integrasi berikutnya. Frame cermin dibersihkan saat
+kamera berhenti atau dijeda dan tidak pernah disimpan ke disk.
 
 ## Tes dan kualitas
 
@@ -200,10 +221,10 @@ sekitar 350 ms; batas dan kecepatan dijepit. Panel dan kartu mengirim sinyal
 untuk penutupan, bukan menutup otomatis. Orb 112 px memiliki lima mekar dan lima
 status. TreePane menampilkan pohon malas, seleksi, dan pratinjau baca-saja.
 
-Jalankan `python -m jarvis_hands`, gulir ke bagian **10** untuk mencoba mouse,
+Jalankan `python -m jarvis_hands --catalog`, gulir ke bagian **10** untuk mencoba mouse,
 keyboard dan data contoh; kamera dan koneksi jaringan tidak digunakan katalog.
 Contoh pemakaian akar riil dari aplikasi Qt: `TreePane(Path("folder-memori"))`.
-Tidak ada pengujian gestur/kamera pada UI ini sampai integrasi Fase 5.
+Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 
 ## Status fase
 
@@ -214,7 +235,7 @@ Tidak ada pengujian gestur/kamera pada UI ini sampai integrasi Fase 5.
 | 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | **Selesai** |
 | 3 | Mesin gestur + fixture landmark | **Selesai** |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | **Selesai** |
-| 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | Belum |
+| 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | **Selesai** |
 | 6 | Integrasi agen lewat `bridge.py` | Belum |
 | 7 | Pengaturan, onboarding kamera, auto-hide | Belum |
 | 8 | Profiling, aksesibilitas, keamanan, packaging Windows | Belum |
@@ -223,12 +244,14 @@ Tidak ada pengujian gestur/kamera pada UI ini sampai integrasi Fase 5.
 
 - `tests/` diletakkan di dalam `jarvis_hands/` sesuai struktur proyek, dan
   dikecualikan dari wheel.
-- Fase 0 belum punya `--mode`/`--key`; keduanya ditambahkan di Fase 5 agar tidak
-  ada flag mati.
-- Overlay dan Settings belum diimplementasikan; katalog menandainya sebagai
-  "TERJADWAL". Gestur tangan, overlay, dan bridge agen belum terhubung ke
-  komponen Fase 4. TreePane menerima akar lewat `TreePane(Path(...))`; konfigurasi
-  `memory_root` belum dihubungkan ke aplikasi produk.
+- Settings belum diimplementasikan. `memory_root` konfigurasi dipakai TreePane;
+  jika tidak diisi TreePane menampilkan data contoh. Bridge agen belum terhubung.
+- Perilaku jendela tembus klik, DPI dan multi-monitor diuji secara otomatis di Qt
+  offscreen, bukan pada compositor Windows sesungguhnya; masih perlu diuji manual
+  di Windows 10/11, termasuk monitor berbeda DPI dan pelepasan monitor.
+- Jendela kontrol sengaja selalu di atas agar kamera bisa dimatikan dan aplikasi
+  bisa ditutup walau overlay tidak menerima klik. Pada layar kecil elemen dapat
+  bertumpang tindih; kalibrasi gestur dengan tangan nyata masih diperlukan.
 - Mediapipe 1.2.3 adalah major baru (classifier Alpha). `HandLandmarker` sudah
   diverifikasi end-to-end di QThread dengan model resmi; pada CPU uji 2 core
   Xeon 2.6 GHz inferensi ±14 ms, sehingga throttle otomatis menahan laju analisis
@@ -240,11 +263,10 @@ Tidak ada pengujian gestur/kamera pada UI ini sampai integrasi Fase 5.
 - `pynput` hanya dipasang di non-Linux. Di Linux tanpa pynput, Ctrl+Alt+G memakai
   fallback Qt yang hanya bekerja saat aplikasi memegang fokus; jalur tanpa gestur
   tetap tersedia lewat pemanggilan `CameraSession.toggle()`/tombol UI.
-- RingWidget sudah punya kontrol status tiruan di katalog, tetapi belum terhubung ke
-  bridge agen (Fase 6) atau kamera (Fase 5).
-- Mesin gestur belum dihubungkan ke kamera/UI; `GestureEngine.process()` siap dipanggil
-  dari `landmarks_ready` di Fase 5. Ambang default (tap 35-260 ms, hold 1000 ms,
-  drag 22 px, clap 600 px/s, explode 800 px/s) perlu dikalibrasi dengan tangan asli.
+- RingWidget belum terhubung ke bridge agen (Fase 6).
+- Mesin gestur terhubung ke kamera dan komponen overlay; ambang default (tap
+  35-260 ms, hold 1000 ms, drag 22 px, clap 600 px/s, explode 800 px/s) perlu
+  dikalibrasi dengan tangan asli.
 - Fixture landmark sintetis, bukan rekaman tangan; bentuk telapak dibuat sederhana
   (landmark lain menumpuk di pergelangan) agar pengujian ambang tetap deterministik.
 - Belum diuji di Windows 10/11 bersih; CI Windows menjalankan pytest, uji packaging
