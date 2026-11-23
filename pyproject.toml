@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-hands"
+version = "0.1.0"
+description = "JARVIS Ring & Hands - antarmuka kaca yang dikendalikan tangan kosong lewat webcam"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "Chipmax" }]
+keywords = ["jarvis", "gesture", "mediapipe", "pyside6", "overlay", "computer-vision"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Video :: Capture",
+  "Topic :: Software Development :: User Interfaces",
+]
+dependencies = [
+  "PySide6==6.12.0",
+  "mediapipe==1.2.3",
+  # mediapipe 1.2.3 mewajibkan opencv-contrib-python (superset opencv-python).
+  # cv2.VideoCapture / CAP_DSHOW tersedia di paket ini; jangan pasang opencv-python
+  # bersamaan karena keduanya menulis modul cv2 yang sama.
+  "opencv-contrib-python==4.12.0.88",
+  "numpy>=2.0,<3",
+  # Hotkey global. Di Linux pynput menarik evdev yang butuh python3-dev;
+  # target rilis adalah Windows 10/11, jadi dependensi ditandai non-Linux.
+  "pynput==1.8.2; sys_platform != 'linux'",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.2",
+  "pytest-qt==4.5.0",
+  "ruff==0.14.4",
+  "mypy==1.18.2",
+]
+packaging = ["pyinstaller==6.22.3"]
+
+[project.scripts]
+jarvis-hands = "jarvis_hands.app:main"
+
+[project.urls]
+Homepage = "https://github.com/4diyat/chipmax-ai"
+
+[tool.setuptools]
+package-dir = { "" = "." }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["jarvis_hands*"]
+exclude = ["jarvis_hands.tests*"]
+
+[tool.setuptools.package-data]
+jarvis_hands = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["jarvis_hands/tests"]
+qt_api = "pyside6"
+addopts = "-ra --strict-markers"
+filterwarnings = ["error::DeprecationWarning:jarvis_hands.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+indent-width = 4
+src = ["jarvis_hands"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF", "PERF"]
+ignore = [
+  "RUF001", # kata Indonesia di komentar/docstring
+  "RUF002",
+  "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"jarvis_hands/tests/*" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+packages = ["jarvis_hands"]
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["PySide6.*", "mediapipe.*", "cv2.*", "pynput.*"]
+ignore_missing_imports = true
+follow_untyped_imports = false
