@@ -3,9 +3,9 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 selesai.** Scaffold, design token Glass Stage, katalog komponen,
-> dan CI (ruff, mypy, pytest) sudah jalan. RingWidget, kamera, gestur, overlay, dan
-> agen menyusul per fase.
+> **Status: Fase 0 dan Fase 1 selesai.** Scaffold, design token Glass Stage, katalog
+> komponen, CI, dan RingWidget lima status dengan animasi 60 fps sudah jalan.
+> Kamera, gestur, overlay, dan agen menyusul per fase.
 
 ## Prinsip produk
 
@@ -39,7 +39,7 @@ tools/headless_qt/        # stub Qt untuk container tanpa libGL (dev saja)
 | Komponen | Versi | Alasan |
 | --- | --- | --- |
 | Python | 3.11 / 3.12 | Mediapipe 1.2.3 mendeklarasikan 3.9–3.14; 3.11 adalah baseline, 3.12 diuji CI. |
-| PySide6 | 6.12.0 | Qt 6, wheel `cp310-abi3` untuk Windows/Linux/macOS. |
+| PySide6 | 6.11.3 | Qt 6, wheel `cp310-abi3` untuk Windows/Linux/macOS. 6.12.0 punya bug refcount pada setter yang mengembalikan `None` (mis. `QColor.setAlphaF`, `QFont.setPointSize`), jadi diturunkan. |
 | mediapipe | 1.2.3 | Wheel `py3-none-manylinux_2_28_x86_64`, `win_amd64`, `win_arm64`; `HandLandmarker` terverifikasi. |
 | OpenCV | 4.12.0.88 | Tidak memakai `opencv-python` karena mediapipe 1.2.3 mewajibkan `opencv-contrib-python` (superset). Memasang keduanya akan menimpa modul `cv2` yang sama. |
 | numpy | >=2,<3 | Dikunci oleh `uv.lock`. |
@@ -94,7 +94,8 @@ make check          # ruff + ruff format + mypy + pytest
 Tes UI memakai `QT_QPA_PLATFORM=offscreen`. Di Linux tanpa `libGL` (container
 minimal), `tests/conftest.py` otomatis membangun stub di `.qt-stubs/` lewat
 `tools/headless_qt/build.py`; di desktop normal, Windows, dan macOS jalur itu
-tidak aktif.
+tidak aktif. Wheel PySide6 6.11.3 tidak menyertakan penanda `py.typed`, jadi
+`make typecheck` menjalankan `tools/pyside6_typing.py` sebelum mypy.
 
 ## Design token Glass Stage
 
@@ -144,7 +145,7 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 | Fase | Cakupan | Status |
 | --- | --- | --- |
 | 0 | Scaffold, token, katalog komponen, CI | **Selesai** |
-| 1 | RingWidget lima status + animasi 60 fps | Belum |
+| 1 | RingWidget lima status + animasi 60 fps | **Selesai** |
 | 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | Belum |
 | 3 | Mesin gestur + fixture landmark | Belum |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | Belum |
@@ -159,10 +160,12 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
   dikecualikan dari wheel.
 - Fase 0 belum punya `--mode`/`--key`; keduanya ditambahkan di Fase 5 agar tidak
   ada flag mati.
-- RingWidget, Orb, Card, TreePane, Overlay, dan Settings belum diimplementasikan;
-  katalog menampilkan kartu "TERJADWAL" bertanda fase, bukan tiruan.
+- Orb, Card, TreePane, Overlay, dan Settings belum diimplementasikan; katalog
+  menampilkan kartu "TERJADWAL" bertanda fase, bukan tiruan.
 - Mediapipe 1.2.3 adalah major baru (classifier Alpha). `HandLandmarker` sudah
   diverifikasi bisa diimpor, tetapi pipeline kamera end-to-end baru diuji di Fase 2.
+- RingWidget sudah punya kontrol status tiruan di katalog, tetapi belum terhubung ke
+  bridge agen (Fase 6) atau kamera (Fase 2).
 - Belum diuji di Windows 10/11 bersih; CI Windows menjalankan pytest, uji packaging
   dan uji mesin bersih ada di Fase 8.
 - Space Grotesk tidak dibundel; tampilan memakai fallback bila font tidak terpasang.

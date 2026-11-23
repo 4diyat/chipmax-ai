@@ -23,6 +23,7 @@ format:
 	$(PY) -m ruff check --fix .
 
 typecheck:
+	$(PY) tools/pyside6_typing.py
 	$(PY) -m mypy
 
 check: lint typecheck test
