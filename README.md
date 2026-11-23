@@ -3,10 +3,11 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 sampai Fase 2 selesai.** Scaffold, design token Glass Stage, katalog
+> **Status: Fase 0 sampai Fase 3 selesai.** Scaffold, design token Glass Stage, katalog
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
-> filter One-Euro, kursor 28 px, indikator kamera, dan jeda Ctrl+Alt+G sudah
-> jalan. Mesin gestur, overlay, dan agen menyusul per fase.
+> filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
+> gestur dengan fixture landmark sudah jalan. Overlay, agen, dan pengaturan
+> menyusul per fase.
 
 ## Prinsip produk
 
@@ -34,6 +35,9 @@ jarvis_hands/
     filters.py            # One-Euro filter 1D/2D
     cursor.py             # landmark -> kursor layar + histeresis cubit
     session.py            # kamera + hotkey + indikator dalam satu API
+  gestures/
+    types.py              # GestureKind, GesturePhase, GestureEvent
+    engine.py             # mesin gestur murni Python (tanpa Qt)
   assets/models/
     hand_landmarker.task  # model resmi Google (Apache-2.0)
   ui/
@@ -41,6 +45,7 @@ jarvis_hands/
     catalog.py            # halaman uji semua komponen (Fase 0-2)
     camera.py             # CameraIndicator: aktif/jeda/mati/error
   tests/                  # pytest + pytest-qt
+    fixtures/landmarks/   # 9 fixture gestur (tap, drag, hold, clap, ...)
 tools/headless_qt/        # stub Qt untuk container tanpa libGL (dev saja)
 .github/workflows/ci.yml  # ruff, mypy, pytest (Linux 3.11/3.12 + Windows)
 ```
@@ -113,7 +118,23 @@ di desktop normal, Windows, dan macOS jalur itu tidak aktif. Wheel PySide6
 
 Tes kamera memakai sumber frame dan tracker tiruan agar deterministik. Ada satu
 tes integrasi yang memuat model Hand Landmarker asli di QThread dan memeriksa
-SHA-256 bundel `hand_landmarker.task`; jalannya butuh ±1 detik.
+SHA-256 bundel `hand_landmarker.task`; jalannya butuh ±1 detik. Mesin gestur
+diuji dengan sembilan fixture landmark di `tests/fixtures/landmarks/` (lihat
+README di folder tersebut); semua ambang gestur berasal dari `GestureThresholds`.
+
+## Gestur
+
+| Gestur | Pemicu | Event |
+| --- | --- | --- |
+| Tap | cubit 35-260 ms tanpa geser >= 22 px | `TAP` (one-shot) |
+| Drag | cubit lalu kursor bergeser >= 22 px | `DRAG` begin/update/end |
+| Hold | cubit >= 1000 ms tanpa geser | `HOLD` begin/update/end |
+| Two-hand | dua tangan masuk radius 80 px | `TWO_HAND` begin/end |
+| Clap | dua tangan mendekat >= 40 px dengan kecepatan >= 600 px/s | `CLAP` |
+| Scrub | goyang horizontal >= 3 pembalikan arah, rentang >= 140 px | `SCRUB_EXPLODE` action `scrub` |
+| Explode | dua tangan menjauh >= 140 px dengan kecepatan >= 800 px/s | `SCRUB_EXPLODE` action `explode` |
+
+Semua ambang ada di `GestureThresholds` dan dapat diubah lewat konfigurasi JSON.
 
 ## Design token Glass Stage
 
@@ -166,7 +187,7 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 | 0 | Scaffold, token, katalog komponen, CI | **Selesai** |
 | 1 | RingWidget lima status + animasi 60 fps | **Selesai** |
 | 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | **Selesai** |
-| 3 | Mesin gestur + fixture landmark | Belum |
+| 3 | Mesin gestur + fixture landmark | **Selesai** |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | Belum |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | Belum |
 | 6 | Integrasi agen lewat `bridge.py` | Belum |
@@ -194,6 +215,11 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
   tetap tersedia lewat pemanggilan `CameraSession.toggle()`/tombol UI.
 - RingWidget sudah punya kontrol status tiruan di katalog, tetapi belum terhubung ke
   bridge agen (Fase 6) atau kamera (Fase 5).
+- Mesin gestur belum dihubungkan ke kamera/UI; `GestureEngine.process()` siap dipanggil
+  dari `landmarks_ready` di Fase 5. Ambang default (tap 35-260 ms, hold 1000 ms,
+  drag 22 px, clap 600 px/s, explode 800 px/s) perlu dikalibrasi dengan tangan asli.
+- Fixture landmark sintetis, bukan rekaman tangan; bentuk telapak dibuat sederhana
+  (landmark lain menumpuk di pergelangan) agar pengujian ambang tetap deterministik.
 - Belum diuji di Windows 10/11 bersih; CI Windows menjalankan pytest, uji packaging
   dan uji mesin bersih ada di Fase 8.
 - Space Grotesk tidak dibundel; tampilan memakai fallback bila font tidak terpasang.
