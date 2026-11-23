@@ -13,3 +13,6 @@ ai-memory-vault/
 backtalk/
 ai-visualizer/
 barehands/
+
+# Local backup zips made while shrinking a folder before transfer.
+*.zip
