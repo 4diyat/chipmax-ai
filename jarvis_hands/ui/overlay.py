@@ -25,10 +25,12 @@ from PySide6.QtWidgets import (
 )
 
 from jarvis_hands.agent.bridge import AgentBridge
-from jarvis_hands.agent.gemini import MAX_PROMPT_CHARS, configured_model
+from jarvis_hands.agent.gemini import MAX_PROMPT_CHARS
+from jarvis_hands.agent.settings import LABELS, AgentSettings, SettingsError, load_settings
 from jarvis_hands.core.config import KEY_COLOR_HEX, AppConfig, DisplayMode, KeyColor
 from jarvis_hands.gestures.engine import GestureEngine
 from jarvis_hands.gestures.types import GestureEvent, GestureKind, GesturePhase
+from jarvis_hands.ui.agent_settings import AgentSettingsDialog
 from jarvis_hands.ui.camera import CameraIndicator
 from jarvis_hands.ui.card import Card, Panel
 from jarvis_hands.ui.cursor import CursorWidget
@@ -386,7 +388,15 @@ class ControlWindow(QWidget):
         if not screens or not 0 <= monitor < len(screens):
             raise ValueError("monitor tidak tersedia")
         self.session = CameraSession(config.camera, parent=self)
-        self.agent = AgentBridge(parent=self)
+        try:
+            agent_settings = load_settings()
+            self._settings_error = ""
+        except SettingsError as exc:
+            agent_settings = AgentSettings()
+            self._settings_error = str(exc)
+        self.agent = AgentBridge(parent=self, settings=agent_settings)
+        self._settings_dialog: AgentSettingsDialog | None = None
+        self._request_label = LABELS[agent_settings.provider]
         self._exit_pending = False
         self.overlay = OverlayWindow(config, self.session, screens[monitor])
         self.overlay._managed = True
@@ -427,23 +437,28 @@ class ControlWindow(QWidget):
         show_tree = QPushButton("Buka/tutup memori")
         show_tree.clicked.connect(self.overlay.toggle_tree)
         layout.addWidget(show_tree)
-        layout.addWidget(QLabel("Gemini · hanya teks ini dikirim ke Google"))
+        self.provider_label = QLabel()
+        layout.addWidget(self.provider_label)
+        self.settings_button = QPushButton("Pengaturan Agen & API")
+        self.settings_button.setObjectName("open-agent-settings")
+        self.settings_button.clicked.connect(self._open_settings)
+        layout.addWidget(self.settings_button)
         self.prompt = QLineEdit()
         self.prompt.setObjectName("agent-prompt")
-        self.prompt.setPlaceholderText("Tulis permintaan untuk Gemini")
+        self.prompt.setPlaceholderText("Tulis permintaan untuk agen")
         self.prompt.setMaxLength(MAX_PROMPT_CHARS)
         self.prompt.returnPressed.connect(self._send_prompt)
         layout.addWidget(self.prompt)
-        self.send_button = QPushButton("Kirim ke Gemini")
+        self.send_button = QPushButton("Kirim")
         self.send_button.clicked.connect(self._send_prompt)
         layout.addWidget(self.send_button)
-        self.agent_status = QLabel(f"Model: {configured_model()} · tanpa audio")
+        self.agent_status = QLabel()
         self.agent_status.setWordWrap(True)
         layout.addWidget(self.agent_status)
         self.answer = QPlainTextEdit()
         self.answer.setObjectName("agent-response")
         self.answer.setReadOnly(True)
-        self.answer.setPlaceholderText("Jawaban Gemini akan tampil di sini")
+        self.answer.setPlaceholderText("Jawaban agen akan tampil di sini")
         self.answer.setMaximumHeight(140)
         layout.addWidget(self.answer)
         self.agent.response.connect(self._agent_response)
@@ -455,27 +470,71 @@ class ControlWindow(QWidget):
         self.session.active_changed.connect(self._camera_status)
         self.session.paused_changed.connect(self._pause_status)
         self.session.error.connect(self._error)
+        self._refresh_agent_label()
+        if self._settings_error:
+            self.send_button.setEnabled(False)
+            self.agent_status.setText(self._settings_error + " Buka pengaturan untuk memperbaiki.")
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.screenAdded.connect(self._screens_changed)
             app.screenRemoved.connect(self._screens_changed)
         self.overlay.show()
 
+    def _refresh_agent_label(self) -> None:
+        settings = self.agent.settings
+        label = LABELS[settings.provider]
+        self.provider_label.setText(f"{label} · teks dikirim ke penyedia yang dipilih")
+        self.send_button.setText(f"Kirim ke {label}")
+        self.agent_status.setText(f"Model: {settings.model} · tanpa audio")
+
+    def _open_settings(self) -> None:
+        if self.agent.busy:
+            return
+        dialog = AgentSettingsDialog(self.agent.settings, self.agent.store, parent=self)
+        self._settings_dialog = dialog
+        dialog.saved.connect(self._settings_saved)
+        dialog.finished.connect(self._settings_closed)
+        dialog._tester.busy_changed.connect(self._settings_test_busy)
+        dialog.open()
+
+    def _settings_saved(self, settings: AgentSettings) -> None:
+        self.agent.settings = settings
+        self._settings_error = ""
+        self.send_button.setEnabled(True)
+        self._refresh_agent_label()
+
+    def _settings_closed(self, result: int) -> None:
+        del result
+        dialog = self._settings_dialog
+        self._settings_dialog = None
+        if dialog is not None:
+            dialog.deleteLater()
+
+    def _settings_test_busy(self, busy: bool) -> None:
+        if not busy and self._exit_pending:
+            QTimer.singleShot(0, self.close)
+
     def _send_prompt(self) -> None:
+        if self._settings_error:
+            self.agent_status.setText("Perbaiki pengaturan agen sebelum mengirim.")
+            return
+        self._request_label = LABELS[self.agent.settings.provider]
         if self.agent.submit(self.prompt.text()):
             self.prompt.clear()
-            self.agent_status.setText("Menghubungi Gemini · teks dikirim ke Google")
+            self.agent_status.setText(f"Menghubungi {self._request_label} · teks dikirim")
 
     def _agent_response(self, text: str) -> None:
         self.answer.setPlainText(text)
+        self.overlay.response_panel.set_title(f"Jawaban {self._request_label}")
         self.overlay.show_response(text)
-        self.agent_status.setText("Jawaban Gemini diterima · teks saja")
+        self.agent_status.setText(f"Jawaban {self._request_label} diterima · teks saja")
 
     def _agent_error(self, message: str) -> None:
         self.agent_status.setText(message)
 
     def _agent_busy(self, busy: bool) -> None:
-        self.send_button.setEnabled(not busy)
+        self.send_button.setEnabled(not busy and not self._settings_error)
+        self.settings_button.setEnabled(not busy)
         self.prompt.setEnabled(not busy)
         if not busy and self._exit_pending:
             QTimer.singleShot(0, self.close)
@@ -549,9 +608,14 @@ class ControlWindow(QWidget):
             self.status.setText("Kamera belum berhenti; coba keluar lagi.")
             event.ignore()
             return
+        if self._settings_dialog is not None and self._settings_dialog._tester.busy:
+            self._exit_pending = True
+            self.status.setText("Tunggu uji koneksi selesai sebelum keluar.")
+            event.ignore()
+            return
         if self.agent.busy:
             self._exit_pending = True
-            self.agent_status.setText("Menunggu permintaan Gemini selesai sebelum keluar.")
+            self.agent_status.setText("Menunggu permintaan agen selesai sebelum keluar.")
             event.ignore()
             return
         self.overlay.shutdown()

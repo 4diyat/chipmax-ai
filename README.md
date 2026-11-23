@@ -7,9 +7,9 @@ JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
 > filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
 > gestur dengan fixture landmark, Card, Panel, Orb, dan TreePane sudah jalan.
-> Overlay tiga mode, integrasi kamera–gestur, dan bridge Gemini API teks sudah
-> tersedia. Pengaturan menyusul; uji Gemini langsung perlu dilakukan di komputer
-> dengan akses internet dan API key.
+> Overlay tiga mode, integrasi kamera–gestur, serta pengaturan dan API teks
+> Gemini, Ollama, Claude dan ChatGPT tersedia. Uji langsung tiap penyedia perlu
+> dilakukan pada perangkat dengan akses dan kredensial yang sesuai.
 
 ## Prinsip produk
 
@@ -18,8 +18,8 @@ JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 2. **Gestur dulu.** Semua interaksi bisa dengan tangan; mouse/keyboard cadangan.
 3. **Privasi.** Kamera aktif hanya saat Mode Gestur menyala. Video diproses lokal,
    tidak pernah disimpan atau dikirim. Indikator kamera selalu terlihat.
-4. **Satu proses, tanpa server lokal.** Permintaan teks Gemini menggunakan
-   koneksi HTTPS keluar hanya saat pengguna menekan Kirim.
+4. **Tidak menjalankan server lokal.** Permintaan teks dikirim hanya saat
+   pengguna menekan Kirim; Ollama memakai server yang sudah dijalankan pengguna.
 5. **Satu bahasa desain.** Glass Stage, token di `jarvis_hands/ui/tokens.py`.
 
 ## Struktur
@@ -40,6 +40,8 @@ jarvis_hands/
     session.py            # kamera + hotkey + indikator dalam satu API
   agent/
     gemini.py             # klien HTTPS Gemini teks-saja, tanpa agen tiruan
+    providers.py          # API Claude, OpenAI dan Ollama
+    settings.py           # preferensi non-rahasia dan kredensial keyring
     bridge.py             # status dan permintaan di QThread
   gestures/
     types.py              # GestureKind, GesturePhase, GestureEvent
@@ -53,6 +55,7 @@ jarvis_hands/
     physics.py / orb.py   # pegas teredam dan Orb lima status
     treepane.py           # UI pohon memori dan pratinjau baca-saja
     overlay.py            # tiga mode, kontrol, perutean gestur dan monitor
+    agent_settings.py     # pengaturan provider, model dan API key
     camera.py             # CameraIndicator: aktif/jeda/mati/error
   memory/tree.py          # pembaca folder memori dan batas keamanan
   tests/                  # pytest + pytest-qt
@@ -128,44 +131,49 @@ tangan, clap, scrub, dan explode diterbitkan sebagai sinyal `gesture`; belum
 diberi aksi produk sampai integrasi berikutnya. Frame cermin dibersihkan saat
 kamera berhenti atau dijeda dan tidak pernah disimpan ke disk.
 
-## Gemini API (Fase 6)
+## Pengaturan Agen & API
 
-Tidak ada agen mock. Dapatkan Gemini API key sendiri dari Google AI Studio dan
-atur environment di komputer Anda **tanpa memasukkan key ke repositori atau chat**.
-Contoh Linux/macOS (masukkan key Anda secara lokal):
+Buka **Pengaturan Agen & API** pada jendela kontrol. Pilih **Gemini, Ollama,
+Claude, atau ChatGPT**, isi nama model dan API key sesuai penyedia, lalu tekan
+**Simpan Pengaturan**. Key yang sudah tersimpan tidak ditampilkan kembali; kolom
+kosong mempertahankan key sebelumnya. **Hapus Key** menghapus key tersimpan untuk
+penyedia terpilih, tetapi tidak mengubah environment variable. Setiap penyedia
+memiliki key dan model tersendiri. Tombol **Uji Koneksi** mengirim permintaan
+nyata dan dapat memakai kuota/biaya; uji tidak menyimpan perubahan otomatis.
 
-```bash
-export GEMINI_API_KEY='KUNCI_ANDA'
-python -m jarvis_hands
-```
+Key disimpan menggunakan kredensial sistem melalui `keyring`: Windows Credential
+Manager, macOS Keychain atau Linux Secret Service. Bila backend sistem tidak
+tersedia/terkunci, aplikasi **menolak menyimpan key**, tanpa fallback file teks.
+Anda tetap dapat mengatur `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+atau `OLLAMA_API_KEY` di environment secara lokal. Key yang tersimpan didahulukan
+daripada environment. Model, pilihan penyedia, dan alamat Ollama disimpan di
+`agent.json` di direktori konfigurasi JARVIS; API key tidak ditulis di sana.
+Jangan mengirim key ke chat atau memasukkannya ke repositori.
 
-Windows PowerShell:
+Ollama memerlukan server yang sudah dijalankan pengguna; aplikasi ini **tidak
+menjalankan server lokal**. HTTP diizinkan hanya ke loopback (`localhost`,
+`127.0.0.1`, atau `::1`); server lain wajib HTTPS. API key Ollama, jika digunakan,
+hanya dikirim melalui HTTPS. Pilih model yang sudah terpasang pada server Ollama.
+Claude menggunakan Anthropic API dan ChatGPT menggunakan OpenAI API; langganan
+aplikasi chat tidak selalu mencakup akses atau biaya API. Sesuaikan model dengan
+akses akun masing-masing; tidak ada pengunduhan model otomatis.
 
-```powershell
-$env:GEMINI_API_KEY = 'KUNCI_ANDA'
-.venv\Scripts\python -m jarvis_hands
-```
+Setiap permintaan mengirim hanya teks yang diketik ke penyedia terpilih; kamera,
+landmark, folder memori, dan riwayat tidak dikirim otomatis. Permintaan berdiri
+sendiri; jangan ketik data yang tidak ingin Anda kirim. Tidak ada agen mock, tool
+lokal, mikrofon, TTS, atau percakapan berkelanjutan. Ring dan Orb menampilkan
+BERPIKIR selama permintaan dan SIAGA setelahnya. Satu permintaan aktif, dengan
+batas 30 detik per operasi jaringan. Redirect dan proxy environment dinonaktifkan;
+tidak ada retry otomatis. Saat keluar di tengah permintaan, kamera dihentikan dan
+aplikasi menunggu thread selesai.
 
-Pada jendela kontrol, ketik teks lalu tekan **Kirim ke Gemini**. Teks itu dikirim
-melalui HTTPS ke Google dan dapat dikenai kuota/biaya sesuai akun. Frame kamera,
-landmark, isi folder memori, dan riwayat tidak dikirim otomatis. Setiap permintaan
-berdiri sendiri; jangan ketik data rahasia bila tidak ingin mengirimkannya ke
-Google. Respons ditampilkan sebagai teks, bukan dieksekusi sebagai perintah.
-Tidak ada tool agen, percakapan berkelanjutan, mikrofon, TTS, atau suara sintetis.
-Ring dan Orb menampilkan BERPIKIR saat menunggu dan SIAGA setelah selesai; status
-MENDENGARKAN dan BERBICARA tidak dipalsukan tanpa sumber audio nyata.
-
-Model bawaan `gemini-3.8-flash` mengikuti [dokumentasi model Google](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
-Untuk memilih model Gemini yang tersedia di akun Anda, atur `GEMINI_MODEL` di
-environment sebelum menjalankan aplikasi. Key dikirim melalui header HTTPS,
-bukan URL; redirect dan proxy lingkungan dinonaktifkan. Satu permintaan aktif,
-timeout jaringan 30 detik per operasi; jika keluar saat permintaan masih aktif,
-aplikasi menunggu permintaan selesai agar thread tidak dihentikan paksa. Tidak ada
-retry otomatis. Endpoint, format dan header mengikuti [Gemini REST quickstart](https://ai.google.dev/gemini-api/docs/quickstart).
-
-Tes otomatis memakai respons HTTP uji tanpa kunci atau jaringan. Sandbox pengembang
-tidak dapat menghubungi endpoint Gemini; **panggilan nyata dan ketersediaan model
-belum diverifikasi** dan perlu dicoba sendiri di komputer yang memiliki akses.
+Referensi API: [Gemini](https://ai.google.dev/gemini-api/docs/quickstart),
+[Claude](https://platform.claude.com/docs/en/api/messages/create),
+[OpenAI](https://platform.openai.com/docs/api-reference/chat/completions),
+[Ollama](https://docs.ollama.com/api/chat). Tes otomatis memakai respons HTTP
+uji tanpa kunci atau jaringan. Sandbox ini tidak dapat memverifikasi layanan
+cloud atau Ollama yang berjalan; uji live tiap provider dan keyring Windows perlu
+dilakukan di perangkat pengguna.
 
 ## Tes dan kualitas
 
@@ -240,9 +248,10 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 
 ## Keamanan
 
-- Tidak ada server lokal atau modul runtime yang mengimpor `socket`, `http.server`,
-  atau Qt Network; `test_security.py` memblokir pola tersebut lewat AST. Klien
-  Gemini memakai `urllib` untuk HTTPS keluar ketika pengguna mengirim teks.
+- Tidak ada server lokal yang dimulai aplikasi atau modul runtime yang mengimpor
+  `socket`, `http.server`, atau Qt Network; `test_security.py` memblokir pola
+  tersebut lewat AST. Klien memakai `urllib` untuk koneksi keluar saat pengguna
+  mengirim teks; Ollama dapat memakai server loopback yang sudah ada.
 - Tidak ada `eval`, `exec`, `pickle`, `marshal`, atau `shelve` di runtime.
 - Modul kamera hanya memproses frame di memori; tidak ada `cv2.imwrite`,
   `VideoWriter`, atau penyimpanan frame. `HandTracker` memuat model dari
@@ -281,7 +290,7 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 | 3 | Mesin gestur + fixture landmark | **Selesai** |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | **Selesai** |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | **Selesai** |
-| 6 | Gemini API teks melalui `bridge.py` | **Diimplementasikan; uji live tertunda** |
+| 6 | Agen teks Gemini, Ollama, Claude, ChatGPT dan pengaturannya | **Diimplementasikan; uji live tertunda** |
 | 7 | Pengaturan, onboarding kamera, auto-hide | Belum |
 | 8 | Profiling, aksesibilitas, keamanan, packaging Windows | Belum |
 
@@ -289,8 +298,9 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 
 - `tests/` diletakkan di dalam `jarvis_hands/` sesuai struktur proyek, dan
   dikecualikan dari wheel.
-- Settings belum diimplementasikan. `memory_root` konfigurasi dipakai TreePane;
-  jika tidak diisi TreePane menampilkan data contoh.
+- Pengaturan Agen & API tersedia; pengaturan tampilan/kamera/gestur dan onboarding
+  lainnya tetap Fase 7. `memory_root` dipakai TreePane; bila tidak diisi, TreePane
+  menampilkan data contoh.
 - Perilaku jendela tembus klik, DPI dan multi-monitor diuji secara otomatis di Qt
   offscreen, bukan pada compositor Windows sesungguhnya; masih perlu diuji manual
   di Windows 10/11, termasuk monitor berbeda DPI dan pelepasan monitor.
@@ -308,8 +318,8 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 - `pynput` hanya dipasang di non-Linux. Di Linux tanpa pynput, Ctrl+Alt+G memakai
   fallback Qt yang hanya bekerja saat aplikasi memegang fokus; jalur tanpa gestur
   tetap tersedia lewat pemanggilan `CameraSession.toggle()`/tombol UI.
-- Bridge Gemini hanya mengirim teks; tidak ada tindakan lokal otonom, audio,
-  atau memori percakapan. Endpoint nyata belum diuji dari sandbox ini.
+- Bridge agen hanya mengirim teks; tidak ada tindakan lokal otonom, audio,
+  atau memori percakapan. Endpoint nyata dan keyring Windows belum diuji di sandbox.
 - Mesin gestur terhubung ke kamera dan komponen overlay; ambang default (tap
   35-260 ms, hold 1000 ms, drag 22 px, clap 600 px/s, explode 800 px/s) perlu
   dikalibrasi dengan tangan asli.

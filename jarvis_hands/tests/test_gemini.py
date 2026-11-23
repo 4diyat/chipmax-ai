@@ -18,9 +18,18 @@ from PySide6.QtWidgets import QApplication
 from jarvis_hands.agent import gemini
 from jarvis_hands.agent.bridge import AgentBridge
 from jarvis_hands.agent.gemini import AgentError
+from jarvis_hands.agent.settings import CredentialStore, SettingsError
 from jarvis_hands.core.config import AppConfig
 from jarvis_hands.core.state import Status
 from jarvis_hands.ui.overlay import ControlWindow
+
+
+@pytest.fixture(autouse=True)
+def no_system_credentials(monkeypatch: Any) -> None:
+    def unavailable(self: CredentialStore, provider: Any) -> str:
+        raise SettingsError("keyring unavailable in test")
+
+    monkeypatch.setattr(CredentialStore, "get", unavailable)
 
 
 class Reply:

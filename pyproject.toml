@@ -31,6 +31,7 @@ dependencies = [
   # Hotkey global. Di Linux pynput menarik evdev yang butuh python3-dev;
   # target rilis adalah Windows 10/11, jadi dependensi ditandai non-Linux.
   "pynput==1.8.2; sys_platform != 'linux'",
+  "keyring>=25.6,<26",
 ]
 
 [project.optional-dependencies]
