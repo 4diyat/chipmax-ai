@@ -16,12 +16,16 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QTreeWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from jarvis_hands.agent.bridge import AgentBridge
+from jarvis_hands.agent.gemini import MAX_PROMPT_CHARS, configured_model
 from jarvis_hands.core.config import KEY_COLOR_HEX, AppConfig, DisplayMode, KeyColor
 from jarvis_hands.gestures.engine import GestureEngine
 from jarvis_hands.gestures.types import GestureEvent, GestureKind, GesturePhase
@@ -29,6 +33,7 @@ from jarvis_hands.ui.camera import CameraIndicator
 from jarvis_hands.ui.card import Card, Panel
 from jarvis_hands.ui.cursor import CursorWidget
 from jarvis_hands.ui.glass import SurfaceHit
+from jarvis_hands.ui.orb import Orb
 from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.tokens import build_theme
 from jarvis_hands.ui.treepane import TreePane
@@ -70,6 +75,19 @@ class OverlayWindow(QWidget):
         self._apply_flags()
         self.setGeometry(geo)
         self.ring = RingWidget(self._theme, parent=self)
+        self.orb = Orb(self._theme, parent=self)
+        self.response_panel = Panel(
+            "Jawaban Gemini", chips=("TEKS",), theme=self._theme, parent=self
+        )
+        self.response_text = QPlainTextEdit()
+        self.response_text.setReadOnly(True)
+        self.response_text.setObjectName("agent-response-overlay")
+        self.response_text.setStyleSheet(
+            "background: rgba(0, 0, 0, 100); color: #ECFFFA; border: none;"
+        )
+        self.response_panel.body().addWidget(self.response_text, 1)
+        self.response_panel.close_requested.connect(self.response_panel.hide)
+        self.response_panel.hide()
         self.card = Card(
             "Memori",
             "Tahan untuk membuka memori; seret pegangan untuk pindah.",
@@ -161,6 +179,10 @@ class OverlayWindow(QWidget):
         self.tree.resize(min(max(620, w - 40), 1000), min(max(350, h - 40), 480))
         self.tree.move(max(0, (w - self.tree.width()) // 2), max(0, (h - self.tree.height()) // 2))
         self.tree.set_bounds(QRectF(0, 0, w, h))
+        self.orb.move(12, 12)
+        self.response_panel.resize(min(520, max(300, w - 32)), min(300, max(200, h - 32)))
+        self.response_panel.move(16, max(0, h - self.response_panel.height() - 16))
+        self.response_panel.set_bounds(QRectF(0, 0, w, h))
         self.indicator.move(max(0, w - self.indicator.width() - 18), 18)
         self.indicator.raise_()
 
@@ -174,6 +196,13 @@ class OverlayWindow(QWidget):
         if self.tree.isVisible():
             self.tree.raise_()
             self.indicator.raise_()
+
+    def show_response(self, text: str) -> None:
+        """Tampilkan jawaban teks murni, tanpa menjalankan isi respons."""
+        self.response_text.setPlainText(text)
+        self.response_panel.show()
+        self.response_panel.raise_()
+        self.indicator.raise_()
 
     def on_frame(self, frame: Frame) -> None:
         if (
@@ -242,14 +271,16 @@ class OverlayWindow(QWidget):
 
     def _target_at(self, global_pos: QPoint) -> Card | Panel | None:
         local = self.mapFromGlobal(global_pos)
-        for widget in (self.tree, self.card):
-            if widget.isVisible() and widget.rect().contains(widget.mapFrom(self, local)):
-                if (
-                    isinstance(widget, Card)
-                    and widget.hit_test(QPointF(widget.mapFrom(self, local))) is SurfaceHit.NONE
-                ):
-                    continue
-                return widget
+        widget = self.childAt(local)
+        while widget is not None and widget is not self:
+            if widget in (self.tree, self.response_panel, self.card):
+                if isinstance(widget, Card):
+                    point = QPointF(widget.mapFromGlobal(global_pos))
+                    if widget.hit_test(point) is SurfaceHit.NONE:
+                        return None
+                if isinstance(widget, (Card, Panel)) and widget.isVisible():
+                    return widget
+            widget = widget.parentWidget()
         return None
 
     def on_tracking(self, result: TrackingResult) -> None:
@@ -355,9 +386,13 @@ class ControlWindow(QWidget):
         if not screens or not 0 <= monitor < len(screens):
             raise ValueError("monitor tidak tersedia")
         self.session = CameraSession(config.camera, parent=self)
+        self.agent = AgentBridge(parent=self)
+        self._exit_pending = False
         self.overlay = OverlayWindow(config, self.session, screens[monitor])
         self.overlay._managed = True
         self.overlay.close_requested.connect(self.close)
+        self.agent.status_changed.connect(self.overlay.ring.set_status)
+        self.agent.status_changed.connect(self.overlay.orb.set_status)
         self.setWindowTitle("JARVIS · kontrol")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         layout = QVBoxLayout(self)
@@ -392,6 +427,28 @@ class ControlWindow(QWidget):
         show_tree = QPushButton("Buka/tutup memori")
         show_tree.clicked.connect(self.overlay.toggle_tree)
         layout.addWidget(show_tree)
+        layout.addWidget(QLabel("Gemini · hanya teks ini dikirim ke Google"))
+        self.prompt = QLineEdit()
+        self.prompt.setObjectName("agent-prompt")
+        self.prompt.setPlaceholderText("Tulis permintaan untuk Gemini")
+        self.prompt.setMaxLength(MAX_PROMPT_CHARS)
+        self.prompt.returnPressed.connect(self._send_prompt)
+        layout.addWidget(self.prompt)
+        self.send_button = QPushButton("Kirim ke Gemini")
+        self.send_button.clicked.connect(self._send_prompt)
+        layout.addWidget(self.send_button)
+        self.agent_status = QLabel(f"Model: {configured_model()} · tanpa audio")
+        self.agent_status.setWordWrap(True)
+        layout.addWidget(self.agent_status)
+        self.answer = QPlainTextEdit()
+        self.answer.setObjectName("agent-response")
+        self.answer.setReadOnly(True)
+        self.answer.setPlaceholderText("Jawaban Gemini akan tampil di sini")
+        self.answer.setMaximumHeight(140)
+        layout.addWidget(self.answer)
+        self.agent.response.connect(self._agent_response)
+        self.agent.error.connect(self._agent_error)
+        self.agent.busy_changed.connect(self._agent_busy)
         close_button = QPushButton("Keluar")
         close_button.clicked.connect(self.close)
         layout.addWidget(close_button)
@@ -403,6 +460,25 @@ class ControlWindow(QWidget):
             app.screenAdded.connect(self._screens_changed)
             app.screenRemoved.connect(self._screens_changed)
         self.overlay.show()
+
+    def _send_prompt(self) -> None:
+        if self.agent.submit(self.prompt.text()):
+            self.prompt.clear()
+            self.agent_status.setText("Menghubungi Gemini · teks dikirim ke Google")
+
+    def _agent_response(self, text: str) -> None:
+        self.answer.setPlainText(text)
+        self.overlay.show_response(text)
+        self.agent_status.setText("Jawaban Gemini diterima · teks saja")
+
+    def _agent_error(self, message: str) -> None:
+        self.agent_status.setText(message)
+
+    def _agent_busy(self, busy: bool) -> None:
+        self.send_button.setEnabled(not busy)
+        self.prompt.setEnabled(not busy)
+        if not busy and self._exit_pending:
+            QTimer.singleShot(0, self.close)
 
     def _mode_changed(self, index: int) -> None:
         self.overlay.set_mode(DisplayMode(self.mode.itemData(index)))
@@ -471,6 +547,11 @@ class ControlWindow(QWidget):
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         if not self.session.stop():
             self.status.setText("Kamera belum berhenti; coba keluar lagi.")
+            event.ignore()
+            return
+        if self.agent.busy:
+            self._exit_pending = True
+            self.agent_status.setText("Menunggu permintaan Gemini selesai sebelum keluar.")
             event.ignore()
             return
         self.overlay.shutdown()

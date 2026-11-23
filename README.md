@@ -3,12 +3,13 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 sampai Fase 5 selesai.** Scaffold, design token Glass Stage, katalog
+> **Status: Fase 0 sampai Fase 6 diimplementasikan.** Scaffold, design token Glass Stage, katalog
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
 > filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
 > gestur dengan fixture landmark, Card, Panel, Orb, dan TreePane sudah jalan.
-> Overlay tiga mode dan integrasi kamera–gestur sudah tersedia. Bridge agen dan
-> pengaturan menyusul per fase.
+> Overlay tiga mode, integrasi kamera–gestur, dan bridge Gemini API teks sudah
+> tersedia. Pengaturan menyusul; uji Gemini langsung perlu dilakukan di komputer
+> dengan akses internet dan API key.
 
 ## Prinsip produk
 
@@ -17,7 +18,8 @@ JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 2. **Gestur dulu.** Semua interaksi bisa dengan tangan; mouse/keyboard cadangan.
 3. **Privasi.** Kamera aktif hanya saat Mode Gestur menyala. Video diproses lokal,
    tidak pernah disimpan atau dikirim. Indikator kamera selalu terlihat.
-4. **Satu proses, tanpa port jaringan.** Tidak ada server lokal.
+4. **Satu proses, tanpa server lokal.** Permintaan teks Gemini menggunakan
+   koneksi HTTPS keluar hanya saat pengguna menekan Kirim.
 5. **Satu bahasa desain.** Glass Stage, token di `jarvis_hands/ui/tokens.py`.
 
 ## Struktur
@@ -36,6 +38,9 @@ jarvis_hands/
     filters.py            # One-Euro filter 1D/2D
     cursor.py             # landmark -> kursor layar + histeresis cubit
     session.py            # kamera + hotkey + indikator dalam satu API
+  agent/
+    gemini.py             # klien HTTPS Gemini teks-saja, tanpa agen tiruan
+    bridge.py             # status dan permintaan di QThread
   gestures/
     types.py              # GestureKind, GesturePhase, GestureEvent
     engine.py             # mesin gestur murni Python (tanpa Qt)
@@ -48,8 +53,8 @@ jarvis_hands/
     physics.py / orb.py   # pegas teredam dan Orb lima status
     treepane.py           # UI pohon memori dan pratinjau baca-saja
     overlay.py            # tiga mode, kontrol, perutean gestur dan monitor
-  memory/tree.py          # pembaca folder memori dan batas keamanan
     camera.py             # CameraIndicator: aktif/jeda/mati/error
+  memory/tree.py          # pembaca folder memori dan batas keamanan
   tests/                  # pytest + pytest-qt
     fixtures/landmarks/   # 9 fixture gestur (tap, drag, hold, clap, ...)
 tools/headless_qt/        # stub Qt untuk container tanpa libGL (dev saja)
@@ -122,6 +127,45 @@ komponen. Di pohon, tap baris memilih dan membuka/menutup folder. Gestur dua
 tangan, clap, scrub, dan explode diterbitkan sebagai sinyal `gesture`; belum
 diberi aksi produk sampai integrasi berikutnya. Frame cermin dibersihkan saat
 kamera berhenti atau dijeda dan tidak pernah disimpan ke disk.
+
+## Gemini API (Fase 6)
+
+Tidak ada agen mock. Dapatkan Gemini API key sendiri dari Google AI Studio dan
+atur environment di komputer Anda **tanpa memasukkan key ke repositori atau chat**.
+Contoh Linux/macOS (masukkan key Anda secara lokal):
+
+```bash
+export GEMINI_API_KEY='KUNCI_ANDA'
+python -m jarvis_hands
+```
+
+Windows PowerShell:
+
+```powershell
+$env:GEMINI_API_KEY = 'KUNCI_ANDA'
+.venv\Scripts\python -m jarvis_hands
+```
+
+Pada jendela kontrol, ketik teks lalu tekan **Kirim ke Gemini**. Teks itu dikirim
+melalui HTTPS ke Google dan dapat dikenai kuota/biaya sesuai akun. Frame kamera,
+landmark, isi folder memori, dan riwayat tidak dikirim otomatis. Setiap permintaan
+berdiri sendiri; jangan ketik data rahasia bila tidak ingin mengirimkannya ke
+Google. Respons ditampilkan sebagai teks, bukan dieksekusi sebagai perintah.
+Tidak ada tool agen, percakapan berkelanjutan, mikrofon, TTS, atau suara sintetis.
+Ring dan Orb menampilkan BERPIKIR saat menunggu dan SIAGA setelah selesai; status
+MENDENGARKAN dan BERBICARA tidak dipalsukan tanpa sumber audio nyata.
+
+Model bawaan `gemini-3.8-flash` mengikuti [dokumentasi model Google](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash).
+Untuk memilih model Gemini yang tersedia di akun Anda, atur `GEMINI_MODEL` di
+environment sebelum menjalankan aplikasi. Key dikirim melalui header HTTPS,
+bukan URL; redirect dan proxy lingkungan dinonaktifkan. Satu permintaan aktif,
+timeout jaringan 30 detik per operasi; jika keluar saat permintaan masih aktif,
+aplikasi menunggu permintaan selesai agar thread tidak dihentikan paksa. Tidak ada
+retry otomatis. Endpoint, format dan header mengikuti [Gemini REST quickstart](https://ai.google.dev/gemini-api/docs/quickstart).
+
+Tes otomatis memakai respons HTTP uji tanpa kunci atau jaringan. Sandbox pengembang
+tidak dapat menghubungi endpoint Gemini; **panggilan nyata dan ketersediaan model
+belum diverifikasi** dan perlu dicoba sendiri di komputer yang memiliki akses.
 
 ## Tes dan kualitas
 
@@ -196,8 +240,9 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 
 ## Keamanan
 
-- Tidak ada modul runtime yang mengimpor `socket`, `http.server`, atau Qt Network;
-  tes `test_security.py` memblokir pola tersebut lewat AST.
+- Tidak ada server lokal atau modul runtime yang mengimpor `socket`, `http.server`,
+  atau Qt Network; `test_security.py` memblokir pola tersebut lewat AST. Klien
+  Gemini memakai `urllib` untuk HTTPS keluar ketika pengguna mengirim teks.
 - Tidak ada `eval`, `exec`, `pickle`, `marshal`, atau `shelve` di runtime.
 - Modul kamera hanya memproses frame di memori; tidak ada `cv2.imwrite`,
   `VideoWriter`, atau penyimpanan frame. `HandTracker` memuat model dari
@@ -236,7 +281,7 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 | 3 | Mesin gestur + fixture landmark | **Selesai** |
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | **Selesai** |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | **Selesai** |
-| 6 | Integrasi agen lewat `bridge.py` | Belum |
+| 6 | Gemini API teks melalui `bridge.py` | **Diimplementasikan; uji live tertunda** |
 | 7 | Pengaturan, onboarding kamera, auto-hide | Belum |
 | 8 | Profiling, aksesibilitas, keamanan, packaging Windows | Belum |
 
@@ -245,7 +290,7 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 - `tests/` diletakkan di dalam `jarvis_hands/` sesuai struktur proyek, dan
   dikecualikan dari wheel.
 - Settings belum diimplementasikan. `memory_root` konfigurasi dipakai TreePane;
-  jika tidak diisi TreePane menampilkan data contoh. Bridge agen belum terhubung.
+  jika tidak diisi TreePane menampilkan data contoh.
 - Perilaku jendela tembus klik, DPI dan multi-monitor diuji secara otomatis di Qt
   offscreen, bukan pada compositor Windows sesungguhnya; masih perlu diuji manual
   di Windows 10/11, termasuk monitor berbeda DPI dan pelepasan monitor.
@@ -263,7 +308,8 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 - `pynput` hanya dipasang di non-Linux. Di Linux tanpa pynput, Ctrl+Alt+G memakai
   fallback Qt yang hanya bekerja saat aplikasi memegang fokus; jalur tanpa gestur
   tetap tersedia lewat pemanggilan `CameraSession.toggle()`/tombol UI.
-- RingWidget belum terhubung ke bridge agen (Fase 6).
+- Bridge Gemini hanya mengirim teks; tidak ada tindakan lokal otonom, audio,
+  atau memori percakapan. Endpoint nyata belum diuji dari sandbox ini.
 - Mesin gestur terhubung ke kamera dan komponen overlay; ambang default (tap
   35-260 ms, hold 1000 ms, drag 22 px, clap 600 px/s, explode 800 px/s) perlu
   dikalibrasi dengan tangan asli.
