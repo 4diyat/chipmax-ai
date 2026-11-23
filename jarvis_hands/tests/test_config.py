@@ -153,3 +153,32 @@ def test_unknown_keys_are_ignored() -> None:
     data["masa_depan"] = {"fitur": True}
     data["camera"]["lensa"] = "lebar"
     assert AppConfig.from_dict(data) == AppConfig.default()
+
+
+def test_camera_analysis_defaults_and_round_trip() -> None:
+    config = AppConfig.default()
+    assert config.camera.analysis_fps == 30
+    assert config.camera.max_cpu_percent == 25.0
+
+    payload = config.to_dict()
+    payload["camera"]["analysis_fps"] = 15
+    payload["camera"]["max_cpu_percent"] = 40.0
+    rebuilt = AppConfig.from_dict(payload)
+    assert rebuilt.camera.analysis_fps == 15
+    assert rebuilt.camera.max_cpu_percent == 40.0
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("analysis_fps", 0),
+        ("analysis_fps", 121),
+        ("max_cpu_percent", 0.0),
+        ("max_cpu_percent", 101.0),
+    ],
+)
+def test_camera_analysis_rejects_out_of_range(key: str, value: object) -> None:
+    payload = AppConfig.default().to_dict()
+    payload["camera"][key] = value
+    with pytest.raises(ConfigError):
+        AppConfig.from_dict(payload)

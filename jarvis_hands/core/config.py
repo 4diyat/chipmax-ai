@@ -108,7 +108,12 @@ def parse_key_color(value: str) -> KeyColorSpec:
 
 @dataclass(frozen=True)
 class CameraConfig:
-    """Pengaturan kamera. ``use_dshow`` hanya berlaku di Windows (``CAP_DSHOW``)."""
+    """Pengaturan kamera. ``use_dshow`` hanya berlaku di Windows (``CAP_DSHOW``).
+
+    ``analysis_fps`` memisahkan laju inferensi dari laju capture: frame tetap
+    dibaca 30 fps untuk mode Cermin, tetapi MediaPipe hanya dijalankan sesuai
+    ``analysis_fps`` dan dibatasi ``max_cpu_percent`` (persen satu core).
+    """
 
     index: int = 0
     width: int = 640
@@ -117,6 +122,8 @@ class CameraConfig:
     mirror: bool = True
     use_dshow: bool = True
     analysis_scale: float = 1.0
+    analysis_fps: int = 30
+    max_cpu_percent: float = 25.0
 
 
 @dataclass(frozen=True)
@@ -189,6 +196,8 @@ class AppConfig:
                 "mirror": self.camera.mirror,
                 "use_dshow": self.camera.use_dshow,
                 "analysis_scale": self.camera.analysis_scale,
+                "analysis_fps": self.camera.analysis_fps,
+                "max_cpu_percent": self.camera.max_cpu_percent,
             },
             "gestures": {
                 "pinch_close": self.gestures.pinch_close,
@@ -254,6 +263,17 @@ class AppConfig:
                     "camera.analysis_scale",
                     minimum=0.25,
                     maximum=1.0,
+                ),
+                analysis_fps=_int(
+                    camera, "analysis_fps", 30, "camera.analysis_fps", minimum=1, maximum=120
+                ),
+                max_cpu_percent=_float(
+                    camera,
+                    "max_cpu_percent",
+                    25.0,
+                    "camera.max_cpu_percent",
+                    minimum=5.0,
+                    maximum=100.0,
                 ),
             ),
             gestures=GestureThresholds(
