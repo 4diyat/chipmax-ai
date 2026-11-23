@@ -15,6 +15,7 @@ from typing import Final
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -23,12 +24,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
 
 from jarvis_hands.core.config import AppConfig
 from jarvis_hands.core.state import Status
+from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.tokens import (
     FONT,
     METRICS,
@@ -59,6 +62,7 @@ class ComponentSpec:
     phase: int
     note: str
     factory: Callable[[Theme], QWidget] | None = None
+    ready: bool = False
 
 
 def _make_glass(theme: Theme) -> QWidget:
@@ -93,7 +97,13 @@ COMPONENTS: Final[tuple[ComponentSpec, ...]] = (
     ),
     ComponentSpec("toast", "Toast", 0, "Notifikasi kecil kanan atas", _make_toast),
     ComponentSpec("hint_bar", "HintBar", 0, "Baris petunjuk gestur di bawah", _make_hint_bar),
-    ComponentSpec("ring", "RingWidget", 1, "Cincin 440 px, lima status, animasi 60 fps"),
+    ComponentSpec(
+        "ring",
+        "RingWidget",
+        1,
+        "Cincin 440 px, lima status, animasi 60 fps",
+        ready=True,
+    ),
     ComponentSpec("cursor", "Cursor", 2, "Cincin 28 px, isi cubit, lingkaran dwell"),
     ComponentSpec(
         "camera_indicator", "CameraIndicator", 2, "Titik rekam, selalu terlihat saat kamera aktif"
@@ -345,11 +355,13 @@ class GlassButton(QPushButton):
         theme: Theme,
         *,
         primary: bool = True,
+        checkable: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(text, parent)
         self._theme = theme
         self._primary = primary
+        self.setCheckable(checkable)
         self.setFont(sans_font(13, bold=True))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -366,8 +378,13 @@ class GlassButton(QPushButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         hovered = self.underMouse()
         down = self.isDown()
-        alpha = 0.34 if down else (0.30 if hovered else 0.22)
-        border = self._theme.palette.accent if self._primary else None
+        checked = self.isChecked()
+        alpha = 0.34 if (down or checked) else (0.30 if hovered else 0.22)
+        border: QColor | None
+        if checked:
+            border = self._theme.palette.hot_rim
+        else:
+            border = self._theme.palette.accent if self._primary else None
         paint_glass(
             painter,
             QRectF(self.rect()),
@@ -382,7 +399,11 @@ class GlassButton(QPushButton):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(3, 3, -3, -3), 9, 9)
         painter.setFont(self.font())
-        painter.setPen(self._theme.palette.hot_rim if self._primary else self._theme.palette.text)
+        if self._primary or self.isChecked():
+            text_color = self._theme.palette.hot_rim
+        else:
+            text_color = self._theme.palette.text
+        painter.setPen(text_color)
         painter.drawText(
             self.rect(),
             Qt.AlignmentFlag.AlignCenter,
@@ -449,6 +470,10 @@ class Badge(QWidget):
         self._font = mono_font(FONT.label, spacing=2.0)
         self.setFont(self._font)
         self.setFixedSize(QFontMetrics(self._font).horizontalAdvance(text) + 28, 26)
+
+    def text(self) -> str:
+        """Teks badge (untuk tes dan aksesibilitas)."""
+        return self._text
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         del event
@@ -592,7 +617,7 @@ class PlaceholderCard(GlassFrame):
         top.setSpacing(10)
         top.addWidget(Badge(f"FASE {spec.phase}", theme, color=theme.palette.teal))
         top.addStretch(1)
-        ready = spec.factory is not None
+        ready = spec.ready or spec.factory is not None
         top.addWidget(
             _label(
                 "SIAP" if ready else "TERJADWAL",
@@ -618,7 +643,13 @@ class PlaceholderCard(GlassFrame):
     def _draw_glyph(self, painter: QPainter) -> None:
         pal = self._theme.palette
         area = QRectF(self.width() - 96, self.height() - 86, 76, 60)
-        pen = QPen(_alpha(pal.teal, 0.35), 1.5, Qt.PenStyle.DashLine)
+        pen = QPen(
+            _alpha(pal.teal, 0.55 if self._spec.ready or self._spec.factory else 0.35),
+            1.5,
+            Qt.PenStyle.SolidLine
+            if (self._spec.ready or self._spec.factory)
+            else Qt.PenStyle.DashLine,
+        )
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         key = self._spec.key
@@ -744,6 +775,7 @@ class CatalogWindow(QMainWindow):
         box.addWidget(self._build_typography())
         box.addWidget(self._build_glass())
         box.addWidget(self._build_controls())
+        box.addWidget(self._build_ring())
         box.addWidget(self._build_status())
         box.addWidget(self._build_cursor())
         box.addWidget(self._build_toasts())
@@ -887,8 +919,91 @@ class CatalogWindow(QMainWindow):
         )
         return section
 
+    def _build_ring(self) -> QWidget:
+        section = Section("05", "Ring", "440 px · lima status · 60 fps", self._theme)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(28)
+
+        ring = RingWidget(self._theme)
+        ring.setObjectName("ring-live")
+        row.addWidget(ring, 0, Qt.AlignmentFlag.AlignTop)
+
+        controls = QVBoxLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(12)
+        controls.addWidget(_label("STATUS TIRUAN", mono_font(FONT.label), self._theme.palette.teal))
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+        for index, status in enumerate(Status):
+            button = GlassButton(status.label, self._theme, checkable=True)
+            button.setMinimumWidth(128)
+            button.setObjectName(f"ring-status-{status.value}")
+            button.setChecked(status is Status.IDLE)
+            button.clicked.connect(lambda _checked=False, chosen=status: ring.set_status(chosen))
+            group.addButton(button)
+            grid.addWidget(button, index // 2, index % 2)
+        controls.addLayout(grid)
+        controls.addSpacing(6)
+
+        controls.addWidget(
+            _label("LEVEL SUARA · AUTO-GAIN", mono_font(FONT.label), self._theme.palette.teal)
+        )
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(0, 100)
+        slider.setValue(0)
+        slider.setObjectName("ring-level")
+        slider.setAccessibleName("Level suara")
+        slider.setStyleSheet(
+            "QSlider::groove:horizontal { height: 4px; "
+            f"background: {_rgba(self._theme.palette.teal, 0.20)}; border-radius: 2px; }}"
+            "QSlider::sub-page:horizontal { "
+            f"background: {_rgba(self._theme.palette.band, 0.45)}; border-radius: 2px; }}"
+            "QSlider::handle:horizontal { width: 14px; height: 14px; margin: -5px 0; "
+            f"border-radius: 7px; background: {self._theme.palette.band.name()}; }}"
+        )
+        controls.addWidget(slider)
+
+        readout = _label(
+            "",
+            mono_font(FONT.label, spacing=1.5),
+            self._theme.palette.muted,
+        )
+        readout.setObjectName("ring-readout")
+        controls.addWidget(readout)
+
+        def refresh() -> None:
+            readout.setText(
+                f"LEVEL {ring.level:.2f} · NORM {ring.normalized_level():.2f} · {ring.status.label}"
+            )
+
+        def on_level(value: int) -> None:
+            ring.set_level(value / 100.0)
+            refresh()
+
+        slider.valueChanged.connect(on_level)
+        ring.status_changed.connect(lambda _status: refresh())
+        refresh()
+
+        controls.addStretch(1)
+        row.addLayout(controls, 1)
+        section.body().addLayout(row)
+        section.body().addWidget(
+            _label(
+                "Satu QTimer 60 fps; fase animasi dihitung dari jam dinding, bukan counter frame.",
+                sans_font(11),
+                self._theme.palette.muted,
+            )
+        )
+        return section
+
     def _build_status(self) -> QWidget:
-        section = Section("05", "Status", "Warna yang dipakai RingWidget", self._theme)
+        section = Section("06", "Status", "Warna yang dipakai RingWidget", self._theme)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
@@ -906,7 +1021,7 @@ class CatalogWindow(QMainWindow):
         return section
 
     def _build_cursor(self) -> QWidget:
-        section = Section("06", "Kursor", "Cincing 28 px, cubit, dwell", self._theme)
+        section = Section("07", "Kursor", "Cincing 28 px, cubit, dwell", self._theme)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(16)
@@ -928,7 +1043,7 @@ class CatalogWindow(QMainWindow):
         return section
 
     def _build_toasts(self) -> QWidget:
-        section = Section("07", "Toast & petunjuk", "Umpan balik singkat", self._theme)
+        section = Section("08", "Toast & petunjuk", "Umpan balik singkat", self._theme)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(16)
@@ -939,7 +1054,7 @@ class CatalogWindow(QMainWindow):
         return section
 
     def _build_map(self) -> QWidget:
-        section = Section("08", "Peta komponen", "Semua fase, satu katalog", self._theme)
+        section = Section("09", "Peta komponen", "Semua fase, satu katalog", self._theme)
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(16)

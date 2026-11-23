@@ -1,13 +1,16 @@
-"""Tes halaman katalog komponen Fase 0."""
+"""Tes halaman katalog komponen (Fase 0-1)."""
 
 from __future__ import annotations
 
+import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QSlider
 
 from jarvis_hands.core.config import AppConfig, with_display_overrides
 from jarvis_hands.core.state import Status
 from jarvis_hands.ui.catalog import (
     COMPONENTS,
+    Badge,
     CatalogWindow,
     CursorPreview,
     GlassButton,
@@ -19,6 +22,7 @@ from jarvis_hands.ui.catalog import (
     ToastPreview,
     TokenCard,
 )
+from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.tokens import METRICS
 
 
@@ -73,6 +77,9 @@ def test_catalog_component_map_is_complete(qtbot) -> None:  # type: ignore[no-un
         assert card is not None, spec.key
         assert 0 <= spec.phase <= 7
     assert [spec.phase for spec in COMPONENTS if spec.factory is not None] == [0, 0, 0, 0, 0]
+    ring_spec = next(spec for spec in COMPONENTS if spec.key == "ring")
+    assert ring_spec.ready is True
+    assert ring_spec.phase == 1
 
 
 def test_catalog_renders_glass_stage(qtbot) -> None:  # type: ignore[no-untyped-def]
@@ -108,7 +115,11 @@ def test_catalog_window_is_not_the_product_overlay(qtbot) -> None:  # type: igno
 
 def test_glass_controls_have_accessible_names(qtbot) -> None:  # type: ignore[no-untyped-def]
     window = _show(qtbot, CatalogWindow())
-    buttons = window.findChildren(GlassButton)
+    buttons = [
+        button
+        for button in window.findChildren(GlassButton)
+        if not button.objectName().startswith("ring-status-")
+    ]
     assert {button.text() for button in buttons} == {"PILIH", "BATAL"}
     for button in buttons:
         assert button.minimumHeight() >= 44
@@ -143,3 +154,39 @@ def test_glass_frames_render(qtbot) -> None:  # type: ignore[no-untyped-def]
     assert len(frames) >= 8
     for frame in frames:
         assert frame.width() > 0 and frame.height() > 0
+
+
+def test_live_ring_section(qtbot) -> None:  # type: ignore[no-untyped-def]
+    window = _show(qtbot, CatalogWindow())
+    ring = window.findChild(RingWidget, "ring-live")
+    assert ring is not None
+    assert ring.width() == METRICS.ring_size
+    assert ring.height() == METRICS.ring_size
+    assert ring.tick_count == METRICS.ring_ticks
+    assert ring.focusPolicy() == Qt.FocusPolicy.NoFocus
+
+    for status in Status:
+        button = window.findChild(GlassButton, f"ring-status-{status.value}")
+        assert button is not None, status
+        assert button.isCheckable()
+
+    slider = window.findChild(QSlider, "ring-level")
+    assert slider is not None
+    slider.setValue(50)
+    assert ring.level == pytest.approx(0.5)
+
+    thinking = window.findChild(GlassButton, "ring-status-thinking")
+    assert thinking is not None
+    qtbot.mouseClick(thinking, Qt.MouseButton.LeftButton)
+    assert ring.status is Status.THINKING
+    assert ring.accessibleDescription() == "Status BERPIKIR"
+
+
+def test_ring_cards_are_marked_ready(qtbot) -> None:  # type: ignore[no-untyped-def]
+    window = _show(qtbot, CatalogWindow())
+    card = window.findChild(PlaceholderCard, "component-ring")
+    assert card is not None
+    labels = [label.text() for label in card.findChildren(QLabel)]
+    assert "SIAP" in labels
+    assert "RingWidget" in labels
+    assert any(badge.text() == "FASE 1" for badge in card.findChildren(Badge))
