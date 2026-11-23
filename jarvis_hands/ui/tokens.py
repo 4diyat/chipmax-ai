@@ -57,6 +57,7 @@ __all__ = [
     "resolve_family",
     "sans_font",
     "status_color",
+    "with_alpha",
 ]
 
 HEX: Final[dict[str, str]] = {
@@ -433,6 +434,12 @@ def paint_glass(
 
 
 def _alpha(color: QColor, alpha: float) -> QColor:
-    out = QColor(color)
-    out.setAlphaF(max(0.0, min(1.0, alpha)))
-    return out
+    # Konstruktor RGBA dipakai alih-alih setAlphaF: lebih murah dan menghindari
+    # bug refcount setter None pada PySide6 6.12.0.
+    alpha_int = round(max(0.0, min(1.0, alpha)) * 255)
+    return QColor(color.red(), color.green(), color.blue(), alpha_int)
+
+
+def with_alpha(color: QColor, alpha: float) -> QColor:
+    """Salin QColor dengan alpha baru (0..1), untuk painter eksternal."""
+    return _alpha(color, alpha)
