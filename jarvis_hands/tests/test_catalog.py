@@ -1,4 +1,4 @@
-"""Tes halaman katalog komponen (Fase 0-1)."""
+"""Tes halaman katalog komponen (Fase 0-2)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QLabel, QSlider
 
 from jarvis_hands.core.config import AppConfig, with_display_overrides
 from jarvis_hands.core.state import Status
+from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.catalog import (
     COMPONENTS,
     Badge,
@@ -190,3 +191,24 @@ def test_ring_cards_are_marked_ready(qtbot) -> None:  # type: ignore[no-untyped-
     assert "SIAP" in labels
     assert "RingWidget" in labels
     assert any(badge.text() == "FASE 1" for badge in card.findChildren(Badge))
+
+
+def test_camera_indicators_show_all_states(qtbot) -> None:  # type: ignore[no-untyped-def]
+    window = _show(qtbot, CatalogWindow())
+    for state in CameraState:
+        indicator = window.findChild(CameraIndicator, f"camera-{state.value}")
+        assert indicator is not None, state
+        assert indicator.state == state
+    active = window.findChild(CameraIndicator, "camera-active")
+    assert active is not None
+    assert "AKTIF" in active.label
+
+
+def test_camera_and_cursor_cards_are_marked_ready(qtbot) -> None:  # type: ignore[no-untyped-def]
+    window = _show(qtbot, CatalogWindow())
+    for key in ("cursor", "camera_indicator"):
+        card = window.findChild(PlaceholderCard, f"component-{key}")
+        assert card is not None, key
+        labels = [label.text() for label in card.findChildren(QLabel)]
+        assert "SIAP" in labels
+        assert any(badge.text() == "FASE 2" for badge in card.findChildren(Badge))

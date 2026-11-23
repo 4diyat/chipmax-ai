@@ -1,8 +1,8 @@
-"""Katalog komponen Glass Stage (halaman uji Fase 0).
+"""Katalog komponen Glass Stage (halaman uji Fase 0-2).
 
 Halaman ini menampilkan seluruh bahasa visual: token warna, tipografi, kaca,
-kontrol, status, kursor, toast, dan petunjuk. Komponen yang belum dibangun
-(RingWidget, Orb, Overlay, ...) muncul sebagai kartu terjadwal bertanda fase,
+kontrol, status, kursor, indikator kamera, toast, dan petunjuk. Komponen yang
+belum dibangun (Orb, Overlay, ...) muncul sebagai kartu terjadwal bertanda fase,
 bukan sebagai tiruan yang menyesatkan.
 """
 
@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from jarvis_hands.core.config import AppConfig
 from jarvis_hands.core.state import Status
+from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.tokens import (
     FONT,
@@ -104,9 +105,13 @@ COMPONENTS: Final[tuple[ComponentSpec, ...]] = (
         "Cincin 440 px, lima status, animasi 60 fps",
         ready=True,
     ),
-    ComponentSpec("cursor", "Cursor", 2, "Cincin 28 px, isi cubit, lingkaran dwell"),
+    ComponentSpec("cursor", "Cursor", 2, "Cincin 28 px, isi cubit, lingkaran dwell", ready=True),
     ComponentSpec(
-        "camera_indicator", "CameraIndicator", 2, "Titik rekam, selalu terlihat saat kamera aktif"
+        "camera_indicator",
+        "CameraIndicator",
+        2,
+        "Titik rekam, selalu terlihat saat kamera aktif",
+        ready=True,
     ),
     ComponentSpec("card", "Card", 4, "Kartu kaca dengan bar pegangan dan tombol tutup"),
     ComponentSpec("orb", "Orb", 4, "Orb kaca 112 px, mekar mengelilingi cincin"),
@@ -707,7 +712,7 @@ class TypographyCard(GlassFrame):
 
 
 class CatalogWindow(QMainWindow):
-    """Jendela katalog Fase 0 (halaman pengembang, bukan overlay produk)."""
+    """Jendela katalog Fase 0-2 (halaman pengembang, bukan overlay produk)."""
 
     def __init__(
         self,
@@ -804,7 +809,7 @@ class CatalogWindow(QMainWindow):
         )
         layout.addLayout(left)
         layout.addStretch(1)
-        layout.addWidget(Badge("KATALOG · FASE 0", self._theme, color=self._theme.palette.accent))
+        layout.addWidget(Badge("KATALOG · FASE 0-2", self._theme, color=self._theme.palette.accent))
         return header
 
     def _build_tokens(self) -> QWidget:
@@ -1013,7 +1018,7 @@ class CatalogWindow(QMainWindow):
         section.body().addLayout(row)
         section.body().addWidget(
             _label(
-                "Animasi cincin (napas, denyut, radar, gelombang suara) datang di Fase 1.",
+                "Animasi cincin (napas, denyut, radar, gelombang suara) aktif di RingWidget.",
                 sans_font(11),
                 self._theme.palette.muted,
             )
@@ -1021,7 +1026,27 @@ class CatalogWindow(QMainWindow):
         return section
 
     def _build_cursor(self) -> QWidget:
-        section = Section("07", "Kursor", "Cincing 28 px, cubit, dwell", self._theme)
+        section = Section(
+            "07", "Kamera & kursor", "Indikator selalu terlihat · cincin 28 px", self._theme
+        )
+        camera_row = QHBoxLayout()
+        camera_row.setContentsMargins(0, 0, 0, 0)
+        camera_row.setSpacing(10)
+        for state in CameraState:
+            indicator = CameraIndicator(self._theme)
+            indicator.set_state(state)
+            indicator.setObjectName(f"camera-{state.value}")
+            camera_row.addWidget(indicator)
+        camera_row.addStretch(1)
+        section.body().addLayout(camera_row)
+        section.body().addWidget(
+            _label(
+                "Indikator kamera tetap terlihat saat Mode Gestur aktif; state jeda dan error "
+                "mengikuti Ctrl+Alt+G.",
+                sans_font(11),
+                self._theme.palette.muted,
+            )
+        )
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(16)
