@@ -12,8 +12,10 @@ ai-visualizer/     the face: the living circuit board, driven by the voice
 fullstack-agent/   the installer and launcher (start/update scripts)
 ai-memory-vault/   the memory system's wizard and templates (a toolbox)
 relink.py          re-wire every path after the folder moves
+set-name.py        set the name ChipMax calls you, everywhere at once
 start.sh           one command: face + voice
 install-chipmax.sh portable setup for a fresh machine
+audio/             ChipMax's first hello, spoken
 ```
 
 ## Start it
@@ -24,6 +26,16 @@ install-chipmax.sh portable setup for a fresh machine
 
 The face opens on the board and the voice comes up behind it. Ctrl-C stops both.
 The gallery of all four faces stays at <http://127.0.0.1:8790/>.
+
+## First thing to do
+
+```
+python3 set-name.py YourName
+```
+
+ChipMax's greeting is "Hello, what are we working on today?" until it knows
+your name. That one command writes it into the boot config, the spoken
+greeting, and the vault profile at once, and prints what it changed.
 
 ## The rule that matters
 
