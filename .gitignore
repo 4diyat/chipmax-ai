@@ -1,0 +1,15 @@
+# ChipMax: the voice environment and its runtime signal bus
+backtalk/.venv/
+backtalk/.voice_*
+backtalk/logs/
+__pycache__/
+*.pyc
+.DS_Store
+
+# The tool repos are their own git clones: never add them to this one.
+# (A bare `git add -A` would otherwise stage every file of every piece.)
+fullstack-agent/
+ai-memory-vault/
+backtalk/
+ai-visualizer/
+barehands/
