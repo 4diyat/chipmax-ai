@@ -1,0 +1,19 @@
+/* Stub libxkbcommon untuk Qt headless. Bukan implementasi xkb. */
+long xkb_keymap_key_get_syms_by_level() { return 0; }
+long xkb_keymap_max_keycode() { return 0; }
+long xkb_keymap_min_keycode() { return 0; }
+long xkb_keymap_mod_get_index() { return 0; }
+long xkb_keymap_num_layouts() { return 0; }
+long xkb_keymap_num_layouts_for_key() { return 0; }
+long xkb_keysym_to_utf8() { return 0; }
+long xkb_state_get_keymap() { return 0; }
+long xkb_state_key_get_layout() { return 0; }
+long xkb_state_key_get_level() { return 0; }
+long xkb_state_key_get_one_sym() { return 0; }
+long xkb_state_key_get_utf8() { return 0; }
+long xkb_state_mod_name_is_active() { return 0; }
+long xkb_state_new() { return 0; }
+long xkb_state_serialize_layout() { return 0; }
+long xkb_state_serialize_mods() { return 0; }
+long xkb_state_unref() { return 0; }
+long xkb_state_update_mask() { return 0; }

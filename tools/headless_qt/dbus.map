@@ -1,0 +1,6 @@
+LIBDBUS_1_3 {
+  global:
+    dbus_*;
+  local:
+    *;
+};
