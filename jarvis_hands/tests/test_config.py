@@ -182,3 +182,50 @@ def test_camera_analysis_rejects_out_of_range(key: str, value: object) -> None:
     payload["camera"][key] = value
     with pytest.raises(ConfigError):
         AppConfig.from_dict(payload)
+
+
+def test_gesture_thresholds_defaults_and_round_trip() -> None:
+    config = AppConfig.default()
+    assert config.gestures.scrub_window_ms == 700
+    assert config.gestures.scrub_reversals == 3
+    assert config.gestures.clap_approach_px == 40.0
+    assert config.gestures.clap_min_speed_px_s == 600.0
+    assert config.gestures.explode_min_speed_px_s == 800.0
+    assert config.gestures.gesture_cooldown_ms == 400
+
+    payload = config.to_dict()
+    payload["gestures"].update(
+        {
+            "scrub_window_ms": 900,
+            "scrub_reversals": 5,
+            "clap_approach_px": 55.0,
+            "clap_min_speed_px_s": 750.0,
+            "explode_min_speed_px_s": 900.0,
+            "gesture_cooldown_ms": 250,
+        }
+    )
+    rebuilt = AppConfig.from_dict(payload)
+    assert rebuilt.gestures.scrub_window_ms == 900
+    assert rebuilt.gestures.scrub_reversals == 5
+    assert rebuilt.gestures.clap_approach_px == 55.0
+    assert rebuilt.gestures.clap_min_speed_px_s == 750.0
+    assert rebuilt.gestures.explode_min_speed_px_s == 900.0
+    assert rebuilt.gestures.gesture_cooldown_ms == 250
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("scrub_reversals", 0),
+        ("scrub_window_ms", 10),
+        ("clap_approach_px", -1.0),
+        ("clap_min_speed_px_s", -1.0),
+        ("explode_min_speed_px_s", -1.0),
+        ("gesture_cooldown_ms", -1),
+    ],
+)
+def test_gesture_thresholds_reject_out_of_range(key: str, value: object) -> None:
+    payload = AppConfig.default().to_dict()
+    payload["gestures"][key] = value
+    with pytest.raises(ConfigError):
+        AppConfig.from_dict(payload)

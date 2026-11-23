@@ -144,6 +144,12 @@ class GestureThresholds:
     clap_window_ms: int = 380
     two_hand_min_px: float = 80.0
     scrub_explode_px: float = 140.0
+    scrub_window_ms: int = 700
+    scrub_reversals: int = 3
+    clap_approach_px: float = 40.0
+    clap_min_speed_px_s: float = 600.0
+    explode_min_speed_px_s: float = 800.0
+    gesture_cooldown_ms: int = 400
 
 
 @dataclass(frozen=True)
@@ -209,6 +215,12 @@ class AppConfig:
                 "clap_window_ms": self.gestures.clap_window_ms,
                 "two_hand_min_px": self.gestures.two_hand_min_px,
                 "scrub_explode_px": self.gestures.scrub_explode_px,
+                "scrub_window_ms": self.gestures.scrub_window_ms,
+                "scrub_reversals": self.gestures.scrub_reversals,
+                "clap_approach_px": self.gestures.clap_approach_px,
+                "clap_min_speed_px_s": self.gestures.clap_min_speed_px_s,
+                "explode_min_speed_px_s": self.gestures.explode_min_speed_px_s,
+                "gesture_cooldown_ms": self.gestures.gesture_cooldown_ms,
             },
             "cursor": {
                 "one_euro_min_cutoff": self.cursor.one_euro_min_cutoff,
@@ -293,6 +305,36 @@ class AppConfig:
                 ),
                 scrub_explode_px=_float(
                     gestures, "scrub_explode_px", 140.0, "gestures.scrub_explode_px", minimum=0.0
+                ),
+                scrub_window_ms=_int(
+                    gestures, "scrub_window_ms", 700, "gestures.scrub_window_ms", minimum=100
+                ),
+                scrub_reversals=_int(
+                    gestures, "scrub_reversals", 3, "gestures.scrub_reversals", minimum=1
+                ),
+                clap_approach_px=_float(
+                    gestures, "clap_approach_px", 40.0, "gestures.clap_approach_px", minimum=0.0
+                ),
+                clap_min_speed_px_s=_float(
+                    gestures,
+                    "clap_min_speed_px_s",
+                    600.0,
+                    "gestures.clap_min_speed_px_s",
+                    minimum=0.0,
+                ),
+                explode_min_speed_px_s=_float(
+                    gestures,
+                    "explode_min_speed_px_s",
+                    800.0,
+                    "gestures.explode_min_speed_px_s",
+                    minimum=0.0,
+                ),
+                gesture_cooldown_ms=_int(
+                    gestures,
+                    "gesture_cooldown_ms",
+                    400,
+                    "gestures.gesture_cooldown_ms",
+                    minimum=0,
                 ),
             ),
             cursor=CursorConfig(
