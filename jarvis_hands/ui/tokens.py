@@ -312,17 +312,23 @@ def apply_theme(app: QApplication, theme: Theme) -> None:
     pal.setColor(QPalette.ColorRole.PlaceholderText, theme.palette.muted)
     app.setPalette(pal)
     app.setStyleSheet(
-        "QToolTip { color: #ECFFFA; background-color: #0A1417; "
-        "border: 1px solid rgba(140, 240, 225, 0.55); padding: 6px; }"
+        f"QToolTip {{ color: {theme.palette.text.name()}; "
+        f"background-color: {theme.palette.stage.name()}; "
+        f"border: 1px solid {theme.palette.border.name()}; padding: 6px; }}"
         "QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }"
-        "QScrollBar::handle:vertical { background: rgba(111, 229, 214, 0.22); "
+        f"QScrollBar::handle:vertical {{ background: {_qss_alpha(theme.palette.teal, 0.22)}; "
         "min-height: 32px; border-radius: 4px; }"
-        "QScrollBar::handle:vertical:hover { background: rgba(111, 229, 214, 0.45); }"
+        f"QScrollBar::handle:vertical:hover {{ background: "
+        f"{_qss_alpha(theme.palette.teal, 0.45)}; }}"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
         "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
         "QScrollArea { background: transparent; }"
     )
     apply_app_font(app)
+
+
+def _qss_alpha(color: QColor, alpha: float) -> str:
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {alpha:.3f})"
 
 
 def relative_luminance(color: QColor) -> float:
@@ -351,8 +357,8 @@ def paint_stage(painter: QPainter, rect: QRectF, theme: Theme) -> None:
     glow = QRadialGradient(
         QPointF(rect.center().x(), rect.top() - rect.height() * 0.15), rect.width() * 0.62
     )
-    glow.setColorAt(0.0, _alpha(theme.palette.teal, GLASS_STYLE.glow_alpha))
-    glow.setColorAt(0.55, _alpha(theme.palette.teal, GLASS_STYLE.glow_alpha * 0.35))
+    glow.setColorAt(0.0, _alpha(theme.palette.teal, theme.style.glow_alpha))
+    glow.setColorAt(0.55, _alpha(theme.palette.teal, theme.style.glow_alpha * 0.35))
     glow.setColorAt(1.0, _alpha(theme.palette.teal, 0.0))
     painter.fillRect(rect, glow)
 

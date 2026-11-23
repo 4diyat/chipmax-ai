@@ -347,7 +347,7 @@ def load_config(path: Path | None = None) -> AppConfig:
         raise ConfigError(f"konfigurasi bukan file: {target}")
     try:
         raw = target.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError(f"tidak bisa membaca konfigurasi: {target} ({exc})") from exc
     try:
         data = json.loads(raw)
