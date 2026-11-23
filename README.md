@@ -3,10 +3,11 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 sampai Fase 3 selesai.** Scaffold, design token Glass Stage, katalog
+> **Status: Fase 0 sampai Fase 4 selesai.** Scaffold, design token Glass Stage, katalog
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
 > filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
-> gestur dengan fixture landmark sudah jalan. Overlay, agen, dan pengaturan
+> gestur dengan fixture landmark, Card, Panel, Orb, dan TreePane sudah jalan.
+> Overlay, agen, dan pengaturan
 > menyusul per fase.
 
 ## Prinsip produk
@@ -42,7 +43,11 @@ jarvis_hands/
     hand_landmarker.task  # model resmi Google (Apache-2.0)
   ui/
     tokens.py             # warna, kaca, huruf, metrik
-    catalog.py            # halaman uji semua komponen (Fase 0-2)
+    catalog.py            # halaman uji semua komponen (Fase 0-4)
+    card.py / glass.py    # Card, Panel, dan chrome kaca bersama
+    physics.py / orb.py   # pegas teredam dan Orb lima status
+    treepane.py           # UI pohon memori dan pratinjau baca-saja
+  memory/tree.py          # pembaca folder memori dan batas keamanan
     camera.py             # CameraIndicator: aktif/jeda/mati/error
   tests/                  # pytest + pytest-qt
     fixtures/landmarks/   # 9 fixture gestur (tap, drag, hold, clap, ...)
@@ -93,8 +98,8 @@ py -3.11 -m venv .venv
 ```
 
 Aplikasi masih membuka **katalog komponen** (jendela pengembang, bukan overlay
-produk). Katalog kini memperlihatkan indikator kamera empat state dan kursor
-28 px. API kamera belum dihubungkan ke jendela overlay (Fase 5). Flag
+produk). Katalog memperlihatkan indikator kamera, kursor, dan komponen Fase 4;
+TreePane di katalog menggunakan data contoh, bukan folder pengguna. API kamera belum dihubungkan ke jendela overlay (Fase 5). Flag
 `--config`, `--high-contrast`, dan `--version` tersedia.
 
 ## Tes dan kualitas
@@ -176,9 +181,29 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 - Modul kamera hanya memproses frame di memori; tidak ada `cv2.imwrite`,
   `VideoWriter`, atau penyimpanan frame. `HandTracker` memuat model dari
   `assets/models`, bukan dari jaringan.
-- Konfigurasi JSON divalidasi ketat; `memory_root` harus folder yang sudah ada.
-  Path traversal/symlink akan ditangani di TreePane (Fase 4).
+- `MemoryTree` hanya membaca di akar yang dipilih: path absolut, `..`, symlink,
+  dan reparse point ditolak; entri tersembunyi dilewati. Pratinjau hanya UTF-8,
+  maksimal 4 KiB dari file maksimal 64 KiB, hingga 500 entri per folder.
+  Pada POSIX, pembukaan folder/file memakai descriptor relatif dan `O_NOFOLLOW`.
+  Pada Windows validasi path tidak atomik terhadap perubahan folder oleh proses
+  lain (TOCTOU): gunakan akar yang hanya dapat ditulis pengguna tepercaya;
+  penguatan dengan handle Windows dan pengujian adversarial masih diperlukan.
+  Hard link di dalam akar juga tidak bisa dibedakan dari file biasa.
 - Tidak ada telemetri; `telemetry_consent` default `false`.
+
+## Komponen Fase 4
+
+Visual acuan ada di `docs/mockups/`. Kartu berukuran 340×190 px dengan margin
+animasi; seret lewat pegangan, pegas kembali ke posisi rumah, atau lepaskan cepat
+untuk dismiss. Pegas mencapai sekitar target dalam 180 ms dan benar-benar diam
+sekitar 350 ms; batas dan kecepatan dijepit. Panel dan kartu mengirim sinyal
+untuk penutupan, bukan menutup otomatis. Orb 112 px memiliki lima mekar dan lima
+status. TreePane menampilkan pohon malas, seleksi, dan pratinjau baca-saja.
+
+Jalankan `python -m jarvis_hands`, gulir ke bagian **10** untuk mencoba mouse,
+keyboard dan data contoh; kamera dan koneksi jaringan tidak digunakan katalog.
+Contoh pemakaian akar riil dari aplikasi Qt: `TreePane(Path("folder-memori"))`.
+Tidak ada pengujian gestur/kamera pada UI ini sampai integrasi Fase 5.
 
 ## Status fase
 
@@ -188,7 +213,7 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 | 1 | RingWidget lima status + animasi 60 fps | **Selesai** |
 | 2 | Kamera + MediaPipe di QThread, One-Euro, kursor, indikator kamera, Ctrl+Alt+G | **Selesai** |
 | 3 | Mesin gestur + fixture landmark | **Selesai** |
-| 4 | Card/Panel/Orb/TreePane, fisika sederhana | Belum |
+| 4 | Card/Panel/Orb/TreePane, fisika sederhana | **Selesai** |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | Belum |
 | 6 | Integrasi agen lewat `bridge.py` | Belum |
 | 7 | Pengaturan, onboarding kamera, auto-hide | Belum |
@@ -200,8 +225,10 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
   dikecualikan dari wheel.
 - Fase 0 belum punya `--mode`/`--key`; keduanya ditambahkan di Fase 5 agar tidak
   ada flag mati.
-- Orb, Card, TreePane, Overlay, dan Settings belum diimplementasikan; katalog
-  menampilkan kartu "TERJADWAL" bertanda fase, bukan tiruan.
+- Overlay dan Settings belum diimplementasikan; katalog menandainya sebagai
+  "TERJADWAL". Gestur tangan, overlay, dan bridge agen belum terhubung ke
+  komponen Fase 4. TreePane menerima akar lewat `TreePane(Path(...))`; konfigurasi
+  `memory_root` belum dihubungkan ke aplikasi produk.
 - Mediapipe 1.2.3 adalah major baru (classifier Alpha). `HandLandmarker` sudah
   diverifikasi end-to-end di QThread dengan model resmi; pada CPU uji 2 core
   Xeon 2.6 GHz inferensi ±14 ms, sehingga throttle otomatis menahan laju analisis

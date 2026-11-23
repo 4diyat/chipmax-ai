@@ -2,7 +2,7 @@
 
 Halaman ini menampilkan seluruh bahasa visual: token warna, tipografi, kaca,
 kontrol, status, kursor, indikator kamera, toast, dan petunjuk. Komponen yang
-belum dibangun (Orb, Overlay, ...) muncul sebagai kartu terjadwal bertanda fase,
+belum dibangun (Overlay, Settings, ...) muncul sebagai kartu terjadwal bertanda fase,
 bukan sebagai tiruan yang menyesatkan.
 """
 
@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
 from jarvis_hands.core.config import AppConfig
 from jarvis_hands.core.state import Status
 from jarvis_hands.ui.camera import CameraIndicator, CameraState
+from jarvis_hands.ui.card import Card, Panel
+from jarvis_hands.ui.orb import Orb
 from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.tokens import (
     FONT,
@@ -50,6 +52,7 @@ from jarvis_hands.ui.tokens import (
     sans_font,
     status_color,
 )
+from jarvis_hands.ui.treepane import TreePane
 
 __all__ = ["COMPONENTS", "CatalogWindow", "ComponentSpec", "Theme"]
 
@@ -113,10 +116,33 @@ COMPONENTS: Final[tuple[ComponentSpec, ...]] = (
         "Titik rekam, selalu terlihat saat kamera aktif",
         ready=True,
     ),
-    ComponentSpec("card", "Card", 4, "Kartu kaca dengan bar pegangan dan tombol tutup"),
-    ComponentSpec("orb", "Orb", 4, "Orb kaca 112 px, mekar mengelilingi cincin"),
-    ComponentSpec("panel", "Panel", 4, "Panel kaca untuk isi dan catatan"),
-    ComponentSpec("tree_pane", "TreePane", 4, "Folder memori, baris tebal sebagai target ketuk"),
+    ComponentSpec(
+        "card",
+        "Card",
+        4,
+        "Kartu kaca dengan bar pegangan dan tombol tutup",
+        lambda t: Card("Catatan", theme=t),
+        True,
+    ),
+    ComponentSpec(
+        "orb", "Orb", 4, "Orb kaca 112 px, mekar mengelilingi cincin", lambda t: Orb(t), True
+    ),
+    ComponentSpec(
+        "panel",
+        "Panel",
+        4,
+        "Panel kaca untuk isi dan catatan",
+        lambda t: Panel("Catatan", theme=t),
+        True,
+    ),
+    ComponentSpec(
+        "tree_pane",
+        "TreePane",
+        4,
+        "Folder memori, baris tebal sebagai target ketuk",
+        lambda t: TreePane(theme=t),
+        True,
+    ),
     ComponentSpec("overlay", "OverlayWindow", 5, "Overlay transparan, tembus klik, multi-monitor"),
     ComponentSpec("settings", "Settings", 7, "Layar pengaturan dan onboarding kamera"),
 )
@@ -785,6 +811,7 @@ class CatalogWindow(QMainWindow):
         box.addWidget(self._build_cursor())
         box.addWidget(self._build_toasts())
         box.addWidget(self._build_map())
+        box.addWidget(self._build_phase4())
         box.addWidget(self._build_footer())
 
     def _build_header(self) -> QWidget:
@@ -809,7 +836,7 @@ class CatalogWindow(QMainWindow):
         )
         layout.addLayout(left)
         layout.addStretch(1)
-        layout.addWidget(Badge("KATALOG · FASE 0-2", self._theme, color=self._theme.palette.accent))
+        layout.addWidget(Badge("KATALOG · FASE 0-4", self._theme, color=self._theme.palette.accent))
         return header
 
     def _build_tokens(self) -> QWidget:
@@ -1076,6 +1103,28 @@ class CatalogWindow(QMainWindow):
         row.addStretch(1)
         section.body().addLayout(row)
         section.body().addWidget(HintBar(self._theme))
+        return section
+
+    def _build_phase4(self) -> QWidget:
+        section = Section("10", "Kartu, orb & memori", "Komponen Fase 4 · data contoh", self._theme)
+        row = QHBoxLayout()
+        stage = QWidget()
+        stage.setFixedSize(500, 300)
+        card = Card(
+            "Catatan", "Seret pegangan; lepas untuk kembali.", theme=self._theme, parent=stage
+        )
+        card.setObjectName("phase4-card")
+        card.set_home(30, 20)
+        card.set_bounds(QRectF(stage.rect()))
+        card.show()
+        row.addWidget(stage)
+        row.addWidget(Orb(self._theme))
+        row.addStretch(1)
+        section.body().addLayout(row)
+        pane = TreePane(theme=self._theme)
+        pane.setObjectName("phase4-tree")
+        pane.setMinimumHeight(400)
+        section.body().addWidget(pane)
         return section
 
     def _build_map(self) -> QWidget:

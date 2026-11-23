@@ -77,7 +77,8 @@ def test_catalog_component_map_is_complete(qtbot) -> None:  # type: ignore[no-un
         card = window.findChild(PlaceholderCard, f"component-{spec.key}")
         assert card is not None, spec.key
         assert 0 <= spec.phase <= 7
-    assert [spec.phase for spec in COMPONENTS if spec.factory is not None] == [0, 0, 0, 0, 0]
+    phases = [spec.phase for spec in COMPONENTS if spec.factory is not None]
+    assert phases == [0, 0, 0, 0, 0, 4, 4, 4, 4]
     ring_spec = next(spec for spec in COMPONENTS if spec.key == "ring")
     assert ring_spec.ready is True
     assert ring_spec.phase == 1
