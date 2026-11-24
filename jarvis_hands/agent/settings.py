@@ -38,6 +38,34 @@ DEFAULT_MODELS = {
     Provider.CLAUDE: "claude-sonnet-4-6",
     Provider.CHATGPT: "gpt-4.1-mini",
 }
+#: Nama tampilan penyedia (mockup: "Google Gemini", "Claude", ...).
+DISPLAY = {
+    Provider.GEMINI: "Google Gemini",
+    Provider.OLLAMA: "Ollama",
+    Provider.CLAUDE: "Claude",
+    Provider.CHATGPT: "ChatGPT",
+}
+#: Nama API pada baris "Penyedia aktif · <API>".
+API_LABELS = {
+    Provider.GEMINI: "Gemini API",
+    Provider.OLLAMA: "Ollama lokal",
+    Provider.CLAUDE: "Claude API",
+    Provider.CHATGPT: "OpenAI API",
+}
+#: Catatan di bawah pilihan penyedia (mockup hanya menampilkannya untuk Ollama).
+PROVIDER_NOTES = {
+    Provider.GEMINI: "Gemini API · kunci dari Google AI Studio, hanya di perangkat ini",
+    Provider.OLLAMA: "Ollama: alamat server · API key opsional",
+    Provider.CLAUDE: "Claude API · kunci dari Anthropic Console, hanya di perangkat ini",
+    Provider.CHATGPT: "OpenAI API · kunci dari platform.openai.com, hanya di perangkat ini",
+}
+#: Placeholder kolom API key per penyedia.
+KEY_PLACEHOLDERS = {
+    Provider.GEMINI: "Masukkan key Gemini",
+    Provider.OLLAMA: "Opsional untuk server lokal",
+    Provider.CLAUDE: "Masukkan key Anthropic",
+    Provider.CHATGPT: "Masukkan key OpenAI",
+}
 ENV_KEYS = {
     Provider.GEMINI: "GEMINI_API_KEY",
     Provider.OLLAMA: "OLLAMA_API_KEY",

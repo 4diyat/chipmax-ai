@@ -25,9 +25,13 @@ from PySide6.QtWidgets import (
 
 from jarvis_hands.agent.bridge import AgentBridge
 from jarvis_hands.agent.settings import (
+    API_LABELS,
     DEFAULT_MODELS,
+    DISPLAY,
     ENV_KEYS,
+    KEY_PLACEHOLDERS,
     LABELS,
+    PROVIDER_NOTES,
     AgentSettings,
     CredentialStore,
     Provider,
@@ -54,6 +58,13 @@ __all__ = ["SETTINGS_QSS", "AgentSettingsDialog", "AgentSettingsPage"]
 def _rgba(color: QColor, alpha: float) -> str:
     """QColor + alpha menjadi ``rgba(...)`` untuk stylesheet."""
     return f"rgba({color.red()}, {color.green()}, {color.blue()}, {max(0.0, min(1.0, alpha)):.3f})"
+
+
+def _provider_note(provider: Provider) -> str:
+    """Baris keterangan penyedia (mockup: hanya Ollama menyebut alamat server)."""
+    if provider is Provider.OLLAMA:
+        return PROVIDER_NOTES[Provider.OLLAMA]
+    return f"Penyedia aktif · {API_LABELS[provider]}"
 
 
 def _field_label(text: str, theme: Theme) -> QLabel:
@@ -171,6 +182,7 @@ class AgentSettingsPage(QWidget):
         self._provider_buttons: dict[Provider, QPushButton] = {}
         for index, provider in enumerate(Provider):
             button = QPushButton(LABELS[provider])
+            button.setAccessibleName(f"Penyedia {DISPLAY[provider]}")
             button.setObjectName(f"provider-{provider.value}")
             button.setMinimumHeight(44)
             button.setCheckable(True)
@@ -181,8 +193,12 @@ class AgentSettingsPage(QWidget):
             choices.addWidget(button)
         self.buttons.idClicked.connect(self._select_provider)
         body.addLayout(choices)
-        self.note = QLabel("Ollama: alamat server · API key opsional")
+        # Mockup 02: satu baris di bawah segmen penyedia — "Ollama: alamat
+        # server · API key opsional" untuk Ollama, "Penyedia aktif · …" lainnya.
+        self.note = QLabel(_provider_note(settings.provider))
+        self.note.setObjectName("provider-note")
         self.note.setWordWrap(True)
+        self.note.setFont(sans_font(FONT.small))
         body.addWidget(self.note)
         # Grid label/kolom menggantikan QFormLayout: label mono berdiri di atas
         # kolom input (mockup), bukan di sampingnya, dan tiap kontrol diberi
@@ -213,7 +229,7 @@ class AgentSettingsPage(QWidget):
         self.key.setObjectName("agent-key")
         self.key.setAccessibleName("API key")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key.setPlaceholderText("Masukkan key baru")
+        self.key.setPlaceholderText(KEY_PLACEHOLDERS[settings.provider])
         self.key.setToolTip("Kosongkan untuk mempertahankan key yang tersimpan.")
         # Ikon mata menempel di dalam kolom input (mockup), jadi key dan tombol
         # dibungkus satu baris tanpa kotak tambahan di kanan.
@@ -324,6 +340,8 @@ class AgentSettingsPage(QWidget):
         if DEFAULT_MODELS[provider] != self._draft.models[provider]:
             self.model.addItem(DEFAULT_MODELS[provider])
         self.model.setCurrentText(self._draft.models[provider])
+        self.note.setText(_provider_note(provider))
+        self.key.setPlaceholderText(KEY_PLACEHOLDERS[provider])
         self.url.setText(self._draft.ollama_url)
         is_ollama = provider is Provider.OLLAMA
         self.url.setEnabled(is_ollama)

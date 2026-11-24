@@ -442,6 +442,23 @@ dan bagian yang menyimpang sudah disamakan:
 - **Overlay**: toast kanan atas, baris petunjuk bawah (petunjuk kiri, status
   kamera/FPS kanan), orb di samping cincin, dan titik idle 16 px.
 
+Fitur yang juga mengikuti mockup (bukan hanya tampilan):
+
+- **Kartu**: `CUBIT SINGKAT` mengaktifkan target/tombol tempat kursor berada;
+  `TAHAN 1 DETIK` membuka memori dari kartu dengan progres tahan tampil di baris
+  footer (`MENAHAN 50%`); `CUBIT + SERET` memindahkan kartu/panel dengan
+  kemiringan mengikuti kecepatan; tombol tutup berlingkaran 44 px dengan area
+  ketuk 56 px (mockup: "tutup 44 px" + "target >= 56 px").
+- **Panel**: klik badan panel (mode cermin/mouse) memicu aksi yang sama seperti
+  gestur tap — jalan non-gestur tetap tersedia.
+- **TreePane**: folder dibuka di tempat (tanpa pindah halaman), seleksi tebal,
+  isi berkas hanya dibaca sebagai teks (tanpa eval/exec/pickle).
+- **Agen & API**: label penyedia mengikuti nama tampilan (Google Gemini dsb.),
+  baris "Penyedia aktif · Gemini API" berubah per penyedia, placeholder kolom
+  key menyesuaikan penyedia, dan `ALAMAT OLLAMA` hanya muncul untuk Ollama.
+- **Overlay**: toast kanan atas, baris petunjuk bawah, titik idle 16 px saat
+  chrome auto-hide (10 detik), status kamera/FPS di kanan bawah.
+
 Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 
 - Nama penyedia memakai label teks (Gemini/Ollama/Claude/ChatGPT), bukan empat

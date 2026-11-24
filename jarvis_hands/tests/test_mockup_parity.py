@@ -167,3 +167,88 @@ def test_tree_pane_shows_breadcrumb_and_footnote(qtbot: Any) -> None:
     assert "BARIS" in pane._footnote.text()
     assert pane._meta.text().endswith("DATA TIDAK TERPERCAYA")
     assert pane._info.font().pointSize() == FONT.title
+
+
+def test_close_icon_is_44px_but_target_is_56px() -> None:
+    """Mockup: ikon tutup 44 px, "target >= 56 px" untuk gestur."""
+    from PySide6.QtCore import QPointF
+
+    from jarvis_hands.ui.glass import CLOSE_HIT, CLOSE_TARGET, close_hit_rect, close_rect
+
+    card = Card("Kartu", "Isi", theme=build_theme())
+    surface = card.surface_rect()
+    assert close_rect(surface).width() == CLOSE_TARGET == 44
+    assert close_hit_rect(surface).width() == CLOSE_HIT == 56
+    center = card.close_rect().center()
+    # 26 px dari pusat: di luar lingkaran 44 px (22 px), di dalam target 56 px.
+    edge = QPointF(center.x(), center.y() + 26)
+    assert card.hit_test(edge) is not None
+    from jarvis_hands.ui.glass import SurfaceHit
+
+    assert card.hit_test(edge) is SurfaceHit.CLOSE
+
+
+def test_panel_body_click_emits_activated(qtbot: Any) -> None:
+    """Jalan non-gestur: klik badan panel memicu aksi buka (bukan hanya drag)."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from jarvis_hands.ui.card import Panel
+
+    panel = Panel("Panel", theme=build_theme())
+    qtbot.addWidget(panel)
+    panel.resize(400, 240)
+    panel.show()
+    fired: list[bool] = []
+    panel.activated.connect(lambda: fired.append(True))
+    QTest.mouseClick(
+        panel,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QPoint(200, 140),
+    )
+    assert fired == [True]
+
+
+def test_provider_page_texts_follow_selection(qtbot: Any) -> None:
+    """Mockup 01/02: keterangan penyedia, placeholder key, dan alamat Ollama."""
+    from jarvis_hands.agent.settings import Provider
+    from jarvis_hands.ui.agent_settings import AgentSettingsPage
+
+    page = AgentSettingsPage(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(page)
+    assert page.note.text() == "Penyedia aktif · Gemini API"
+    assert page.key.placeholderText() == "Masukkan key Gemini"
+    assert not page.url.isVisible() or not page.url_label.isVisible()
+
+    page._select_provider(list(Provider).index(Provider.OLLAMA))
+    assert page.note.text() == "Ollama: alamat server · API key opsional"
+    assert page.key.placeholderText() == "Opsional untuk server lokal"
+    assert page.url_label.isVisible() or page.url_label.text() == "ALAMAT OLLAMA"
+
+    page._select_provider(list(Provider).index(Provider.CHATGPT))
+    assert "OpenAI API" in page.note.text()
+    assert page.key.placeholderText() == "Masukkan key OpenAI"
+
+
+def test_hold_progress_feedback_on_card(qtbot: Any, qapp: Any) -> None:
+    """Mockup: "TAHAN 1 DETIK" - progres tahan ditampilkan di kartu."""
+    from jarvis_hands.core.config import AppConfig
+    from jarvis_hands.gestures.types import GestureEvent, GestureKind, GesturePhase
+    from jarvis_hands.ui.overlay import OverlayWindow
+    from jarvis_hands.vision.session import CameraSession
+
+    config = AppConfig.default()
+    overlay = OverlayWindow(config, CameraSession(config.camera), qapp.primaryScreen())
+    qtbot.addWidget(overlay)
+    center = overlay.card.mapToGlobal(overlay.card.surface_rect().center().toPoint())
+    overlay._press_target = overlay.card
+    overlay._pinch_started = 0
+    overlay._route(
+        GestureEvent(
+            GestureKind.HOLD, GesturePhase.UPDATE, 10, center.x(), center.y(), magnitude=500
+        )
+    )
+    assert "50%" in overlay.card.footer
+    overlay._route(GestureEvent(GestureKind.HOLD, GesturePhase.END, 20, center.x(), center.y()))
+    assert overlay.card.footer == "Tahan 1 detik"

@@ -531,6 +531,7 @@ class OverlayWindow(QWidget):
             if event.phase is GesturePhase.BEGIN and target is not None:
                 self._drag = target
                 target.begin_drag(QPointF(self.mapFromGlobal(point)))
+                self.show_toast("Kartu diseret", detail="Lepas untuk kembali ke rumah")
             elif event.phase is GesturePhase.UPDATE and self._drag is not None:
                 self._drag.update_drag(QPointF(self.mapFromGlobal(point)))
             elif event.phase is GesturePhase.END and self._drag is not None:
@@ -544,16 +545,23 @@ class OverlayWindow(QWidget):
             if target.hit_test(local) is SurfaceHit.CLOSE:
                 target.close_requested.emit()
             elif target is self.card:
+                # Mockup: "CUBIT SINGKAT - Mengetuk target atau tombol".
                 self.card.opened.emit()
             elif target is self.tree:
                 self._tree_tap(point)
-        elif (
-            event.kind is GestureKind.HOLD
-            and event.phase is GesturePhase.BEGIN
-            and target is self.card
-            and not self.tree.isVisible()
-        ):
-            self.toggle_tree()
+            elif isinstance(target, Panel):
+                target.activated.emit()
+        elif event.kind is GestureKind.HOLD and target is self.card:
+            if event.phase is GesturePhase.BEGIN and not self.tree.isVisible():
+                # Mockup: "TAHAN 1 DETIK - Membuka memori dari kartu".
+                self.card.set_footer("MEMBUKA MEMORI…")
+                self.toggle_tree()
+                self.card.set_footer("Tahan 1 detik")
+            elif event.phase is GesturePhase.UPDATE:
+                progress = min(1.0, max(0.0, event.magnitude / self.config.gestures.hold_ms))
+                self.card.set_footer(f"MENAHAN {round(progress * 100)}%")
+            elif event.phase is GesturePhase.END:
+                self.card.set_footer("Tahan 1 detik")
 
     def _tree_tap(self, point: QPoint) -> None:
         tree = self.tree.findChild(QTreeWidget, "memory-tree")

@@ -14,9 +14,11 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from jarvis_hands.ui.tokens import METRICS, Theme, paint_glass, with_alpha
 
 __all__ = [
+    "CLOSE_HIT",
     "CLOSE_TARGET",
     "HANDLE_SIZE",
     "SurfaceHit",
+    "close_hit_rect",
     "close_rect",
     "handle_rect",
     "idle_dot_hit_rect",
@@ -30,6 +32,8 @@ __all__ = [
 
 HANDLE_SIZE = QSizeF(float(METRICS.handle_width), float(METRICS.handle_height))
 CLOSE_TARGET = 44.0
+#: Area ketuk tombol tutup; mockup: ikon 44 px, "target >= 56 px".
+CLOSE_HIT = 56.0
 #: Jarak titik idle dari tepi bawah layar (mockup: "titik 16 px").
 IDLE_DOT_MARGIN = 18.0
 
@@ -95,8 +99,19 @@ def handle_rect(rect: QRectF) -> QRectF:
 
 
 def close_rect(rect: QRectF) -> QRectF:
-    """Area target tombol tutup 44x44 di kanan atas."""
+    """Lingkaran tombol tutup 44x44 di kanan atas."""
     return QRectF(rect.right() - CLOSE_TARGET - 10, rect.top() + 8, CLOSE_TARGET, CLOSE_TARGET)
+
+
+def close_hit_rect(rect: QRectF) -> QRectF:
+    """Area ketuk 56x56 di sekitar tombol tutup 44 px.
+
+    Mockup meminta ikon 44 px tetapi target sentuh minimal 56 px; lingkaran
+    yang digambar tetap 44 px agar tidak terlihat besar.
+    """
+    area = close_rect(rect)
+    delta = (CLOSE_HIT - CLOSE_TARGET) / 2.0
+    return area.adjusted(-delta, -delta, delta, delta)
 
 
 def paint_handle(painter: QPainter, rect: QRectF, theme: Theme) -> None:

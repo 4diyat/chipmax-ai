@@ -50,6 +50,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWi
 from jarvis_hands.ui.glass import (
     CLOSE_TARGET,
     SurfaceHit,
+    close_hit_rect,
     close_rect,
     handle_rect,
     paint_card_surface,
@@ -291,7 +292,7 @@ class Card(QWidget):
         """Bagian mana dari kartu yang berada di ``local``."""
         if not self.surface_rect().contains(local):
             return SurfaceHit.NONE
-        if self.close_rect().contains(local):
+        if close_hit_rect(self.surface_rect()).contains(local):
             return SurfaceHit.CLOSE
         if self.handle_rect().adjusted(-8, -8, 8, 8).contains(local):
             return SurfaceHit.HANDLE
@@ -590,6 +591,8 @@ class Panel(QWidget):
 
     #: Tombol tutup ditekan.
     close_requested = Signal()
+    #: Badan panel diketuk/dipilih (jalan non-gestur untuk membuka isi).
+    activated = Signal()
     #: Mulai seret panel (payload: posisi di koordinat induk).
     drag_started = Signal(QPoint)
     #: Panel bergerak saat diseret.
@@ -740,7 +743,7 @@ class Panel(QWidget):
 
     def hit_test(self, local: QPointF) -> SurfaceHit:
         """Bagian mana dari panel yang berada di ``local``."""
-        if self.close_rect().contains(local):
+        if close_hit_rect(QRectF(self.rect())).contains(local):
             return SurfaceHit.CLOSE
         if self.handle_rect().adjusted(-8, -8, 8, 8).contains(local):
             return SurfaceHit.HANDLE
@@ -793,11 +796,13 @@ class Panel(QWidget):
         self._clamp_into_area()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if (
-            self.hit_test(event.position()) is SurfaceHit.HANDLE
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
+        hit = self.hit_test(event.position())
+        if hit is SurfaceHit.HANDLE and event.button() == Qt.MouseButton.LeftButton:
             self.begin_drag(QPointF(self.mapToParent(event.position().toPoint())))
+            event.accept()
+            return
+        if hit is SurfaceHit.BODY and event.button() == Qt.MouseButton.LeftButton:
+            self.activated.emit()
             event.accept()
             return
         event.ignore()
