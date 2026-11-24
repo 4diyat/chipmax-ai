@@ -133,6 +133,7 @@ def test_redirects_rejected() -> None:
     )
 
 
+# IDs eksplisit mencegah pytest memakai isi payload >1 MB sebagai nama tes di CI.
 @pytest.mark.parametrize(
     "raw",
     [b"not json", b"{}", b'{"candidates": []}', b"x" * (gemini.MAX_RESPONSE_BYTES + 1)],
