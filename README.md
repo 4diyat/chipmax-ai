@@ -418,23 +418,29 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 
 ## Selisih dengan mockup
 
-Mockup di `docs/mockups/` sudah ditinjau ulang terhadap implementasi nyata
-(render offscreen) dan bagian yang menyimpang sudah disamakan:
+Mockup di `docs/mockups/` ditinjau terhadap implementasi nyata (render offscreen)
+dan bagian yang menyimpang sudah disamakan:
 
-- **Card**: judul 20 pt tebal di baris atas, chip di bawah judul, isi 14 pt redup
-  (sebelumnya judul 12 pt dan chip di atas judul). Judul yang terlalu panjang
+- **Card**: judul 20 pt tebal, chip di bawah judul, isi 12 pt, dan baris footer
+  mono kecil (mis. `TAHAN 1 DETIK`) seperti mockup. Judul terlalu panjang
   diturunkan ukurannya lalu dipotong elipsis agar tidak menimpa tombol tutup.
-- **TreePane**: seleksi baris 56 px memakai palette teal transparan. Sebelumnya
-  `#AARRGGBB` dipakai di QSS; Qt membacanya sebagai `#RRGGBB` sehingga muncul blok
-  biru pekat di area indentasi. Baris keamanan kini bernuansa amber seperti mockup.
-- **Pengaturan**: sidebar berikon (gear, monitor, kamera, tangan) + garis judul,
-  lambang mekar di kanan atas, tombol tutup bulat, tombol primer teal. Label
-  "AGEN & API" tidak lagi tampil "AGEN_API" (Qt menganggap `&` sebagai mnemonic).
-- **Agen & API**: label mono di atas kolom input, baris "ALAMAT OLLAMA" hanya
-  muncul untuk Ollama, ikon mata di dalam kolom key, notice berpagar gembok
-  dengan badge status uji di kanan, tombol hapus key jadi ikon tempat sampah.
-- **Overlay**: toast kanan atas, baris petunjuk bawah (kiri petunjuk, kanan status
-  kamera), orb di samping cincin seperti mockup, dan titik idle 16 px.
+- **Panel**: judul 20 pt tebal dan tidak lagi dipaksa kapital, chip sebaris di
+  kanan judul.
+- **TreePane**: breadcrumb `memori / proyek / jarvis / catatan.md` di header
+  panel, judul berkas 20 pt + baris keterangan `4 KB · LOKAL · DATA TIDAK
+  TERPERCAYA`, paragraf penjelasan, catatan keamanan amber, chip tunggal
+  `AKAR AMAN`, baris 56 px, dan footnote `BARIS 56 PX …` di bawah panel.
+  Seleksi memakai palette teal transparan — sebelumnya `#AARRGGBB` di QSS
+  dibaca Qt sebagai `#RRGGBB` sehingga muncul blok biru pekat.
+- **Pengaturan**: sidebar berikon (gear, monitor, kamera, tangan) dengan isian +
+  bilah teal untuk halaman aktif, tombol nav menggambar ikon/teks sendiri agar
+  label `AGEN & API` tidak menjadi `AGEN_API`; lambang mekar di piringan kaca,
+  tombol tutup lingkaran berikon, tombol primer berisi teal.
+- **Agen & API**: label mono di atas kolom input, baris `ALAMAT OLLAMA` hanya
+  untuk Ollama, ikon mata di kolom key, notice berpagar gembok dengan badge
+  status uji di kanan, tombol hapus key berupa ikon tempat sampah.
+- **Overlay**: toast kanan atas, baris petunjuk bawah (petunjuk kiri, status
+  kamera/FPS kanan), orb di samping cincin, dan titik idle 16 px.
 
 Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 
@@ -444,6 +450,10 @@ Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
   mockup adalah pratinjau, angkanya tetap mengikuti `tokens.METRICS`.
 - Tombol keyboard tetap ada di jendela kontrol terpisah (jalan non-gestur) walau
   tidak digambar di mockup.
+- Pratinjau teks panjang di mockup (paragraf `Isi folder dibaca…`) memakai teks
+  penjelasan tetap; isi berkas sebenarnya tampil di kotak pratinjau di bawahnya.
+- Status uji koneksi tetap berupa teks (mis. `Keyring sistem tidak tersedia…`)
+  di samping badge, karena pesannya bergantung pada hasil uji nyata.
 
 ## Status fase
 

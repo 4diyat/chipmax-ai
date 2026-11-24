@@ -57,6 +57,7 @@ from jarvis_hands.ui.glass import (
     paint_handle,
     paint_shadow,
 )
+from jarvis_hands.ui.icons import IconKind, icon_icon
 from jarvis_hands.ui.physics import SpringConfig, SpringMotion
 from jarvis_hands.ui.tokens import (
     FONT,
@@ -130,6 +131,7 @@ class Card(QWidget):
         text: str = "",
         *,
         chip: str = "DRAF",
+        footer: str = "",
         theme: Theme | None = None,
         clock: Callable[[], float] | None = None,
         spring: SpringConfig | None = None,
@@ -141,6 +143,7 @@ class Card(QWidget):
         self._title = title
         self._text = text
         self._chip = chip
+        self._footer = footer
         self._motion = SpringMotion(spring)
         self._area: QRectF | None = None
         self._dragging = False
@@ -182,6 +185,16 @@ class Card(QWidget):
     def chip(self) -> str:
         """Label chip (mis. DRAF, LOKAL)."""
         return self._chip
+
+    @property
+    def footer(self) -> str:
+        """Keterangan mono kecil di bawah kartu (mis. ``TAHAN 1 DETIK``)."""
+        return self._footer
+
+    def set_footer(self, footer: str) -> None:
+        """Ganti keterangan bawah kartu."""
+        self._footer = footer
+        self.update()
 
     @property
     def is_dragging(self) -> bool:
@@ -552,10 +565,21 @@ class Card(QWidget):
             surface.bottom() - METRICS.card_padding - (surface.top() + 112),
         )
         painter.setFont(sans_font(FONT.small))
-        painter.setPen(pal.muted)
+        painter.setPen(with_alpha(pal.text, 0.88))
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.AlignmentFlag.AlignTop)
         flags |= int(Qt.TextFlag.TextWordWrap)
         painter.drawText(body, flags, self._text)
+        if self._footer:
+            footer_font = mono_font(FONT.label, spacing=1.5)
+            painter.setFont(footer_font)
+            painter.setPen(with_alpha(pal.muted, 0.85))
+            footer = QRectF(
+                left,
+                surface.bottom() - METRICS.card_padding - 14,
+                surface.width() - 2 * METRICS.card_padding,
+                14,
+            )
+            painter.drawText(footer, Qt.AlignmentFlag.AlignLeft, caps(self._footer))
 
     def _update_accessible(self) -> None:
         self.setAccessibleDescription(f"{caps(self._chip)}. {self._text}")
@@ -582,11 +606,13 @@ class Panel(QWidget):
         chips: Sequence[str] = (),
         theme: Theme | None = None,
         alpha: float = 0.22,
+        title_size: int = FONT.title,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._theme = theme or build_theme()
         self._alpha = alpha
+        self._title_size = title_size
         self._title = title
         self._chips = tuple(chips)
         self._dragging = False
@@ -608,8 +634,8 @@ class Panel(QWidget):
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(10)
-        self._title_label = QLabel(caps(title), self._header)
-        self._title_label.setFont(sans_font(FONT.small, bold=True))
+        self._title_label = QLabel(title, self._header)
+        self._title_label.setFont(sans_font(self._title_size, bold=True))
         self._title_label.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         header_layout.addWidget(self._title_label)
         self._chip_host = QWidget(self._header)
@@ -630,6 +656,8 @@ class Panel(QWidget):
             "QPushButton { background: transparent; border: none; }"
             "QPushButton:hover, QPushButton:focus { background: transparent; border: none; }"
         )
+        self._close.setIcon(icon_icon(IconKind.CLOSE, self._theme.palette.accent, size=16))
+        self._close.setIconSize(QSize(16, 16))
         self._close.setAccessibleName("Tutup panel")
         self._close.setAccessibleDescription("Tutup panel ini")
         self._close.setToolTip("Tutup (Esc)")
@@ -658,10 +686,16 @@ class Panel(QWidget):
         """Layout isi; tambahkan widget ke sini."""
         return self._box
 
+    def _header_row(self) -> QHBoxLayout:
+        """Baris header (judul, chip, dan slot tambahan) untuk subkelas."""
+        layout = self._header.layout()
+        assert isinstance(layout, QHBoxLayout)
+        return layout
+
     def set_title(self, title: str) -> None:
         """Ganti judul."""
         self._title = title
-        self._title_label.setText(caps(title))
+        self._title_label.setText(title)
         self.setAccessibleName(f"Panel {title}" if title else "Panel kaca")
 
     def set_chips(self, chips: Sequence[str]) -> None:
@@ -678,6 +712,7 @@ class Panel(QWidget):
         """Ganti tema dan segarkan label/chip panel."""
         self._theme = theme
         self._title_label.setStyleSheet(f"color: {theme.palette.text.name()};")
+        self._close.setIcon(icon_icon(IconKind.CLOSE, theme.palette.accent, size=16))
         for chip in self._chip_host.findChildren(_Chip):
             chip.set_theme(theme)
         self.update()

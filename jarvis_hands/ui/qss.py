@@ -110,8 +110,11 @@ QPushButton[nav="true"][current="true"]:hover {{
     background: {_rgba(teal, 0.28)};
 }}
 QPushButton[provider="true"]:checked {{
-    background: {_rgba(teal, 0.22)}; border: 1px solid {teal}; color: {hot_rim};
+    background: {_rgba(teal, 0.26)}; border: 1px solid {teal}; color: {hot_rim};
     font-weight: bold;
+}}
+QPushButton[provider="true"]:checked:hover {{
+    background: {_rgba(teal, 0.34)};
 }}
 QPushButton[primary="true"] {{
     background: {_rgba(teal, 0.20)}; border: 1px solid {teal}; color: {hot_rim};

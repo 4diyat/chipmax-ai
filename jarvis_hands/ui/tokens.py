@@ -174,6 +174,8 @@ class Metrics:
     cursor_size: int = 28
     idle_dot: int = 16
     min_target: int = 56
+    #: Tinggi baris pohon memori (mockup: baris 46-56 px).
+    tree_row: int = 56
     toast_width: int = 320
     hint_height: int = 44
     panel_radius: int = 20

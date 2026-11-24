@@ -217,16 +217,23 @@ def _close(painter: QPainter, color: QColor) -> None:
 
 
 def _bloom(painter: QPainter, color: QColor) -> None:
-    """Lima mekar Orb pada lambang JARVIS di kanan atas dialog."""
-    painter.drawEllipse(QPointF(12, 12), 3.0, 3.0)
+    """Lima mekar Orb pada lambang JARVIS di kanan atas dialog.
+
+    Mockup memakai lima kelopak berisi di dalam piringan; kelopak digambar
+    sebagai elips miring yang mengelilingi inti kosong.
+    """
+    painter.save()
+    painter.setBrush(color)
     for index in range(5):
-        angle = math.radians(-90.0 + index * 72.0)
-        center = QPointF(12 + math.cos(angle) * 6.6, 12 + math.sin(angle) * 6.6)
+        angle = -90.0 + index * 72.0
         painter.save()
-        painter.translate(center)
-        painter.rotate(index * 72.0)
-        painter.drawEllipse(QPointF(0, 0), 2.1, 3.2)
+        painter.translate(QPointF(12, 12))
+        painter.rotate(angle)
+        painter.drawEllipse(QPointF(0, -5.6), 2.5, 3.9)
         painter.restore()
+    painter.restore()
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawEllipse(QPointF(12, 12), 2.0, 2.0)
 
 
 _DRAW = {

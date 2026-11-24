@@ -107,11 +107,18 @@ def test_tree_selection_uses_teal_palette_not_hex(qtbot: Any) -> None:
 
 
 def test_settings_nav_keeps_ampersand(qtbot: Any) -> None:
+    """Label "AGEN & API" tidak boleh tampil "AGEN_API" di sidebar."""
     dialog = SettingsDialog(AppConfig.default(), AgentSettings(), CredentialStore())
     qtbot.addWidget(dialog)
+    dialog.resize(980, 700)
+    dialog.show()
     agent_button = dialog._nav_buttons[0]
     assert agent_button.accessibleName() == "AGEN & API"
-    assert "&&" in agent_button.text()  # escape Qt, tampil sebagai "&"
+    # Tombol nav menggambar teksnya sendiri, jadi Qt tidak menelan "&" sebagai
+    # mnemonic. Teks asli harus tetap utuh.
+    assert agent_button.text() == "AGEN & API"
+    image = agent_button.grab().toImage()
+    assert image.width() > 0 and image.height() > 0
     assert dialog.logo is not None
 
 
@@ -127,3 +134,36 @@ def test_every_icon_renders_pixels(kind: IconKind) -> None:
         if image.pixelColor(x, y).alpha() > 0
     ]
     assert opaque, kind
+
+
+def test_card_footer_is_rendered_and_readable() -> None:
+    card = Card("Kartu 01 · catatan", "Isi", chip="DRAF", footer="Tahan 1 detik")
+    assert card.footer == "Tahan 1 detik"
+    card.set_footer("GESER DI PEGANGAN")
+    assert card.footer == "GESER DI PEGANGAN"
+    assert card.grab().toImage().width() > 0
+
+
+def test_panel_title_matches_mockup_scale(qtbot: Any) -> None:
+    """Panel mockup memakai judul 20 px tebal dan teks judul apa adanya."""
+    from PySide6.QtWidgets import QLabel
+
+    from jarvis_hands.ui.card import Panel
+
+    panel = Panel("Panel · catatan", theme=build_theme())
+    qtbot.addWidget(panel)
+    assert panel.title == "Panel · catatan"
+    titles = [label for label in panel.findChildren(QLabel) if label.text() == "Panel · catatan"]
+    assert titles, "judul panel harus tampil tanpa diubah ke kapital"
+    assert titles[0].font().pointSize() == FONT.title
+
+
+def test_tree_pane_shows_breadcrumb_and_footnote(qtbot: Any) -> None:
+    pane = TreePane(theme=build_theme())
+    qtbot.addWidget(pane)
+    pane.resize(900, 460)
+    pane.show()
+    assert pane._path.text().startswith("memori")
+    assert "BARIS" in pane._footnote.text()
+    assert pane._meta.text().endswith("DATA TIDAK TERPERCAYA")
+    assert pane._info.font().pointSize() == FONT.title

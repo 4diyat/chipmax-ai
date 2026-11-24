@@ -32,6 +32,11 @@ from jarvis_hands.ui.tokens import (
 )
 
 
+def format_short_size(size: int | None) -> str:
+    """Ukuran ringkas gaya mockup (``4 KB`` bukan ``4,0 KB``)."""
+    return format_size(size or 0).replace(",0 ", " ")
+
+
 class TreePane(Panel):
     """Pohon memori malas dan pratinjau teks. Tanpa akar, tampilkan contoh lokal.
 
@@ -51,8 +56,20 @@ class TreePane(Panel):
     ) -> None:
         self._tree_theme = theme or build_theme()
         super().__init__(
-            "Memori", chips=("AKAR AMAN", "LOKAL"), theme=self._tree_theme, parent=parent
+            "MEMORI",
+            chips=("AKAR AMAN",),
+            theme=self._tree_theme,
+            title_size=FONT.label,
+            parent=parent,
         )
+        # Mockup menaruh breadcrumb di header, di sebelah judul panel.
+        self._path = QLabel("memori")
+        self._path.setObjectName("memory-path")
+        self._path.setFont(mono_font(FONT.label, spacing=2.0))
+        self._path.setWordWrap(False)
+        header = self._header_row()
+        header.insertSpacing(1, 18)
+        header.insertWidget(2, self._path)
         self.setAccessibleName("Pohon memori")
         self._memory = MemoryTree(root) if root is not None else None
         self._nodes: dict[int, MemoryNode] = {}
@@ -71,14 +88,24 @@ class TreePane(Panel):
         self._list.itemSelectionChanged.connect(self._select)
         row.addWidget(self._list, 3)
         right = QVBoxLayout()
-        self._path = QLabel("memori")
-        self._path.setObjectName("memory-path")
-        self._path.setFont(mono_font(FONT.label))
-        self._path.setWordWrap(True)
-        right.addWidget(self._path)
-        self._info = QLabel("Pilih berkas untuk pratinjau")
-        self._info.setFont(sans_font(FONT.small, bold=True))
+        right.setSpacing(8)
+        self._info = QLabel("Pilih berkas")
+        self._info.setObjectName("memory-info")
+        self._info.setFont(sans_font(FONT.title, bold=True))
         right.addWidget(self._info)
+        self._meta = QLabel("")
+        self._meta.setObjectName("memory-meta")
+        self._meta.setFont(mono_font(FONT.label))
+        right.addWidget(self._meta)
+        self._explain = QLabel(
+            "Isi berkas dibaca sebagai teks biasa. Tidak ada eval, exec, "
+            "pickle, atau eksekusi apa pun dari isi memori."
+        )
+        self._explain.setObjectName("memory-explain")
+        self._explain.setFont(sans_font(FONT.small))
+        self._explain.setWordWrap(True)
+        right.addWidget(self._explain)
+        right.addSpacing(6)
         self._preview = QPlainTextEdit()
         self._preview.setObjectName("memory-preview")
         self._preview.setAccessibleName("Pratinjau isi memori")
@@ -93,6 +120,12 @@ class TreePane(Panel):
         right.addWidget(warning)
         row.addLayout(right, 2)
         self.body().addLayout(row, 1)
+        self._footnote = QLabel(
+            f"BARIS {METRICS.tree_row} PX · FOLDER TERBUKA DI TEMPAT · SELEKSI TEBAL"
+        )
+        self._footnote.setObjectName("memory-footnote")
+        self._footnote.setFont(mono_font(FONT.label, spacing=1.5))
+        self.body().addWidget(self._footnote)
         self._list_stylesheet()
         self._populate()
         enforce_min_targets(self)
@@ -112,15 +145,18 @@ class TreePane(Panel):
         pal = self._tree_theme.palette
         self._list.setStyleSheet(
             f"QTreeWidget {{ background: transparent; color: {pal.text.name()}; border: none; }}"
-            f"QTreeWidget::item {{ min-height: {METRICS.min_target}px; padding-left: 6px; }}"
+            f"QTreeWidget::item {{ min-height: {METRICS.tree_row}px; padding-left: 6px; }}"
             f"QTreeWidget::item:hover {{ background: {rgba_css(pal.teal, 0.10)}; }}"
         )
         selection = self._list.palette()
         selection.setColor(QPalette.ColorRole.Highlight, with_alpha(pal.teal, 0.22))
         selection.setColor(QPalette.ColorRole.HighlightedText, pal.text)
         self._list.setPalette(selection)
-        self._path.setStyleSheet(f"color: {pal.teal.name()};")
-        self._info.setStyleSheet(f"color: {pal.text.name()};")
+        self._path.setStyleSheet(f"color: {rgba_css(pal.muted, 0.85)}; background: transparent;")
+        self._info.setStyleSheet(f"color: {pal.accent.name()}; background: transparent;")
+        self._meta.setStyleSheet(f"color: {pal.muted.name()}; background: transparent;")
+        self._explain.setStyleSheet(f"color: {rgba_css(pal.muted, 0.90)}; background: transparent;")
+        self._footnote.setStyleSheet(f"color: {rgba_css(pal.muted, 0.75)};")
         self._preview.setStyleSheet(
             f"background: {rgba_css(pal.stage, 0.55)}; "
             f"color: {pal.muted.name()}; "
@@ -242,9 +278,11 @@ class TreePane(Panel):
         self.selected.emit(node.rel_path)
         self._preview.clear()
         if node.is_folder:
-            self._info.setText("Folder · " + node.name)
+            self._info.setText(f"Folder · {node.name}")
+            self._meta.setText("BUKA BARIS UNTUK MELIHAT ISI FOLDER")
             return
-        self._info.setText(f"{node.name} · {format_size(node.size)}")
+        self._info.setText(node.name)
+        self._meta.setText(f"{format_short_size(node.size)} · LOKAL · DATA TIDAK TERPERCAYA")
         try:
             text = self._memory.read_preview(node.rel_path) if self._memory else node.preview or ""
             self._preview.setPlainText(text)

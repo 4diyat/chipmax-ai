@@ -114,6 +114,7 @@ class OverlayWindow(QWidget):
         self.card = Card(
             "Memori",
             "Tahan untuk membuka memori; seret pegangan untuk pindah.",
+            footer="Tahan 1 detik",
             theme=self._theme,
             parent=self,
         )

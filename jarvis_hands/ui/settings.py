@@ -13,8 +13,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QCloseEvent, QColor
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QCloseEvent, QColor, QEnterEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -48,9 +48,9 @@ from jarvis_hands.core.config import (
 )
 from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.agent_settings import AgentSettingsPage
-from jarvis_hands.ui.icons import IconGlyph, IconKind, icon_icon
+from jarvis_hands.ui.icons import IconKind, icon_icon, paint_icon
 from jarvis_hands.ui.qss import dialog_qss, style_form_labels
-from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font
+from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font, with_alpha
 
 __all__ = [
     "CameraSettingsPage",
@@ -58,15 +58,6 @@ __all__ = [
     "GestureSettingsPage",
     "SettingsDialog",
 ]
-
-
-def _plain_label(text: str) -> str:
-    """Tampilkan ``&`` apa adanya pada teks tombol.
-
-    Qt memperlakukan ``&`` sebagai penanda huruf pintas, sehingga "AGEN & API"
-    akan tampil "AGEN_API" tanpa escape ganda.
-    """
-    return text.replace("&", "&&")
 
 
 def _rgba(color: QColor, alpha: float) -> str:
@@ -477,11 +468,129 @@ class GestureSettingsPage(QWidget):
         self.load(AppConfig.default())
 
 
-#: Gaya tombol navigasi sidebar: ikon di kiri, teks mono kapital.
-_NAV_QSS = (
-    "QPushButton { text-align: left; padding-left: 14px; }"
-    "QPushButton:checked { font-weight: bold; }"
-)
+class _NavButton(QPushButton):
+    """Tombol sidebar: bilah teal + isian saat aktif, ikon garis, teks mono.
+
+    Ikon dan teks digambar sendiri karena QSS tombol Qt tidak menyisakan ruang
+    untuk ikon (ikon menimpa huruf pertama) dan ``text-align`` dengan padding
+    besar memotong label secara vertikal.
+    """
+
+    ROW_HEIGHT = 44
+    ICON_LEFT = 14
+    ICON_SIZE = 18
+    TEXT_LEFT = 44
+
+    def __init__(
+        self,
+        label: str,
+        kind: IconKind,
+        theme: Theme,
+        *,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(label, parent)
+        self._label = label
+        self._kind = kind
+        self._theme = theme
+        self._hover = False
+        self.setCheckable(True)
+        self.setMinimumHeight(self.ROW_HEIGHT)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setProperty("nav", True)
+        self.setStyleSheet("QPushButton { background: transparent; border: none; }")
+        self.setAccessibleName(label)
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema tombol."""
+        self._theme = theme
+        self.update()
+
+    def enterEvent(self, event: QEnterEvent) -> None:  # noqa: N802
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent) -> None:  # noqa: N802
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        width = self.fontMetrics().horizontalAdvance(self._label) + self.TEXT_LEFT + 18
+        return QSize(width, self.ROW_HEIGHT)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pal = self._theme.palette
+        rect = QRectF(self.rect()).adjusted(0.5, 1.5, -0.5, -1.5)
+        checked = self.isChecked()
+        if checked:
+            painter.setPen(with_alpha(pal.teal, 0.55))
+            painter.setBrush(with_alpha(pal.teal, 0.20))
+            painter.drawRoundedRect(rect, 10, 10)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(pal.teal)
+            painter.drawRoundedRect(QRectF(0.0, rect.top() + 4, 3.0, rect.height() - 8), 1.5, 1.5)
+        elif self._hover:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(with_alpha(pal.teal, 0.10))
+            painter.drawRoundedRect(rect, 10, 10)
+        color = pal.hot_rim if checked else with_alpha(pal.accent, 0.92)
+        icon_rect = QRectF(
+            self.ICON_LEFT,
+            (self.height() - self.ICON_SIZE) / 2.0,
+            self.ICON_SIZE,
+            self.ICON_SIZE,
+        )
+        paint_icon(painter, icon_rect, self._kind, color)
+        font = mono_font(FONT.small, spacing=1.5)
+        font.setBold(checked)
+        painter.setFont(font)
+        painter.setPen(color)
+        painter.drawText(
+            QRectF(self.TEXT_LEFT, 0.0, self.width() - self.TEXT_LEFT - 8.0, float(self.height())),
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            self._label,
+        )
+        painter.end()
+
+
+class _LogoBadge(QWidget):
+    """Lambang mekar JARVIS di piringan kaca (mockup: kanan atas dialog)."""
+
+    def __init__(self, theme: Theme, *, size: int = 72, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._theme = theme
+        self._kind = IconKind.BLOOM
+        self.setFixedSize(size, size)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema lambang."""
+        self._theme = theme
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pal = self._theme.palette
+        rect = QRectF(self.rect()).adjusted(1.5, 1.5, -1.5, -1.5)
+        glow = rect.adjusted(-6, -6, 6, 6)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(with_alpha(pal.teal, 0.10))
+        painter.drawEllipse(glow)
+        painter.setBrush(with_alpha(pal.stage, 0.55))
+        painter.setPen(with_alpha(pal.border, 0.55))
+        painter.drawEllipse(rect)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(with_alpha(pal.accent, 0.35))
+        painter.drawEllipse(rect.adjusted(5, 5, -5, -5))
+        paint_icon(painter, rect.adjusted(16, 16, -16, -16), self._kind, pal.accent, width=1.2)
+        painter.end()
 
 
 #: Ikon sidebar per halaman.
@@ -556,18 +665,8 @@ class SettingsDialog(QDialog):
                 ("GESTUR", "gesture"),
             )
         ):
-            button = QPushButton(_plain_label(label))
+            button = _NavButton(label, self._nav_icons[name], self._theme)
             button.setObjectName(f"settings-nav-{name}")
-            button.setProperty("nav", True)
-            button.setCheckable(True)
-            button.setMinimumHeight(44)
-            button.setIcon(icon_icon(self._nav_icons[name], self._theme.palette.teal, size=18))
-            button.setIconSize(QSize(18, 18))
-            # Ikon di kiri teks dengan jarak 12 px (QSS padding tidak menyisakan
-            # ruang untuk ikon, jadi jarak diatur lewat awalan ruang tipis).
-            button.setStyleSheet(_NAV_QSS)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setAccessibleName(label)
             self._nav.addButton(button, index)
             self._nav_buttons.append(button)
             side.addWidget(button)
@@ -580,7 +679,7 @@ class SettingsDialog(QDialog):
         header = QHBoxLayout()
         header.setSpacing(12)
         header.addStretch(1)
-        self.logo = IconGlyph(IconKind.BLOOM, self._theme, size=64)
+        self.logo = _LogoBadge(self._theme, size=72)
         self.logo.setAccessibleName("Lambang JARVIS")
         header.addWidget(self.logo)
         self.header_close = QPushButton("")
@@ -646,7 +745,6 @@ class SettingsDialog(QDialog):
         self.camera_page.onboarding_requested.connect(self.onboarding_requested)
         self.agent_page._tester.busy_changed.connect(self._tester_busy)
         self._nav_buttons[0].setChecked(True)
-        self._nav_buttons[0].setProperty("current", True)
         self.pages.setCurrentIndex(0)
 
     # ------------------------------------------------------------------ props
@@ -666,10 +764,8 @@ class SettingsDialog(QDialog):
 
     def _show_page(self, index: int) -> None:
         self.pages.setCurrentIndex(index)
-        for position, button in enumerate(self._nav_buttons):
-            button.setProperty("current", position == index)
-            button.style().unpolish(button)
-            button.style().polish(button)
+        for button in self._nav_buttons:
+            button.update()
 
     def apply_external_config(self, config: AppConfig) -> None:
         """Segarkan draf setelah konfigurasi berubah di luar dialog (onboarding)."""
