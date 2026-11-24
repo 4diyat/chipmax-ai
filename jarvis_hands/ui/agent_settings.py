@@ -37,7 +37,11 @@ from jarvis_hands.agent.settings import (
     save_settings,
 )
 from jarvis_hands.ui.accessibility import enforce_min_targets
-from jarvis_hands.ui.icons import IconGlyph, IconKind, icon_icon
+from jarvis_hands.ui.icons import (
+    IconGlyph,
+    IconKind,
+    icon_icon,
+)
 from jarvis_hands.ui.qss import SETTINGS_QSS, dialog_qss
 from jarvis_hands.ui.tokens import (
     FONT,
@@ -50,6 +54,14 @@ from jarvis_hands.ui.tokens import (
 )
 
 __all__ = ["SETTINGS_QSS", "AgentSettingsDialog", "AgentSettingsPage"]
+
+#: Ikon merek per penyedia yang ditampilkan di samping nama di dropdown.
+PROVIDER_ICONS: dict[Provider, IconKind] = {
+    Provider.GEMINI: IconKind.PROVIDER_GEMINI,
+    Provider.OLLAMA: IconKind.PROVIDER_OLLAMA,
+    Provider.CLAUDE: IconKind.PROVIDER_CLAUDE,
+    Provider.CHATGPT: IconKind.PROVIDER_CHATGPT,
+}
 
 
 def _rgba(color: QColor, alpha: float) -> str:
@@ -174,6 +186,10 @@ class AgentSettingsPage(QWidget):
         self.provider_dropdown.setCursor(Qt.CursorShape.PointingHandCursor)
         for provider in Provider:
             self.provider_dropdown.addItem(DISPLAY[provider], provider.value)
+            self.provider_dropdown.setItemIcon(
+                self.provider_dropdown.count() - 1,
+                icon_icon(PROVIDER_ICONS[provider], self._theme.palette.accent, size=18),
+            )
         self.provider_dropdown.currentIndexChanged.connect(self._select_provider)
         body.addWidget(self.provider_dropdown)
         self.note = QLabel(PROVIDER_NOTES[self._draft.provider])

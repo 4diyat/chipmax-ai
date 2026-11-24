@@ -437,8 +437,8 @@ Mockup di `docs/mockups/` sudah ditinjau ulang terhadap implementasi nyata
 
 Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 
-- Nama penyedia memakai label teks (Gemini/Ollama/Claude/ChatGPT), bukan empat
-  logo merek berwarna; logo pihak ketiga tidak dibundel.
+- Ikon merek provider (digambar garis, tidak raster) ditampilkan di samping
+  nama di dropdown penyedia; aset raster merek pihak ketiga tidak dibundel.
 - Mockup menggambar cincin lebih tebal (±40 px) daripada metrik produk 20 px;
   mockup adalah pratinjau, angkanya tetap mengikuti `tokens.METRICS`.
 - Tombol keyboard tetap ada di jendela kontrol terpisah (jalan non-gestur) walau

@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QRectF
+from PySide6.QtCore import QRectF, QSize
 from PySide6.QtGui import QColor
 
 from jarvis_hands.agent.settings import AgentSettings, CredentialStore
@@ -195,3 +195,52 @@ def test_provider_dropdown_switches_note_and_placeholder(qtbot: Any) -> None:
     assert dialog.key.placeholderText() == "Masukkan key ChatGPT API"
 
     dialog.close()
+
+
+def test_provider_dropdown_items_have_brand_icons(qtbot: Any) -> None:
+    """Setiap item dropdown penyedia harus punya ikon merek yang terrender."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+    expected = {
+        "Google Gemini": IconKind.PROVIDER_GEMINI,
+        "Ollama": IconKind.PROVIDER_OLLAMA,
+        "Claude": IconKind.PROVIDER_CLAUDE,
+        "ChatGPT": IconKind.PROVIDER_CHATGPT,
+    }
+    for index in range(dialog.provider_dropdown.count()):
+        text = dialog.provider_dropdown.itemText(index)
+        icon = dialog.provider_dropdown.itemIcon(index)
+        assert not icon.isNull(), text
+        pixmap = icon.pixmap(QSize(20, 20))
+        image = pixmap.toImage()
+        opaque = [
+            (x, y)
+            for x in range(image.width())
+            for y in range(image.height())
+            if image.pixelColor(x, y).alpha() > 0
+        ]
+        assert opaque, text
+        assert expected[text] is not None
+    dialog.close()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        IconKind.PROVIDER_GEMINI,
+        IconKind.PROVIDER_OLLAMA,
+        IconKind.PROVIDER_CLAUDE,
+        IconKind.PROVIDER_CHATGPT,
+    ],
+)
+def test_provider_icon_renders_pixels(kind: IconKind) -> None:
+    pixmap = icon_pixmap(kind, QColor("#6FE5D6"), size=20)
+    assert not pixmap.isNull()
+    image = pixmap.toImage()
+    opaque = [
+        (x, y)
+        for x in range(image.width())
+        for y in range(image.height())
+        if image.pixelColor(x, y).alpha() > 0
+    ]
+    assert opaque, kind
