@@ -163,7 +163,9 @@ class CameraWorker(QObject):
         super().__init__(parent)
         self._config = config
         self._source_factory = source_factory or (lambda: OpenCVSource(config))
-        self._tracker_factory = tracker_factory or HandTracker
+        self._tracker_factory = tracker_factory or (
+            lambda: HandTracker(delegate=self._config.delegate)
+        )
         self._stop = threading.Event()
         self._pause = threading.Event()
         self._active = False

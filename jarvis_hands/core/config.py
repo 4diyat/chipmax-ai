@@ -127,6 +127,9 @@ class CameraConfig:
     analysis_scale: float = 1.0
     analysis_fps: int = 30
     max_cpu_percent: float = 25.0
+    #: Akselerator model pelacakan tangan: ``"auto"`` (coba GPU dulu, fallback
+    #: CPU), ``"gpu"``, atau ``"cpu"``.
+    delegate: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -212,6 +215,7 @@ class AppConfig:
                 "analysis_scale": self.camera.analysis_scale,
                 "analysis_fps": self.camera.analysis_fps,
                 "max_cpu_percent": self.camera.max_cpu_percent,
+                "delegate": self.camera.delegate,
             },
             "gestures": {
                 "pinch_close": self.gestures.pinch_close,
@@ -299,6 +303,7 @@ class AppConfig:
                     minimum=5.0,
                     maximum=100.0,
                 ),
+                delegate=_str(camera, "delegate", "auto", "camera.delegate"),
             ),
             gestures=GestureThresholds(
                 pinch_close=pinch_close,

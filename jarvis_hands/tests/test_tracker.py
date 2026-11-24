@@ -60,6 +60,23 @@ def test_model_path_property() -> None:
     assert not tracker.is_loaded
 
 
+def test_delegate_defaults_to_auto() -> None:
+    tracker = HandTracker()
+    assert tracker.delegate == "auto"
+    assert tracker.delegate_used is None
+
+
+@pytest.mark.parametrize("delegate", ("auto", "gpu", "cpu"))
+def test_delegate_property(delegate: str) -> None:
+    tracker = HandTracker(delegate=delegate)
+    assert tracker.delegate == delegate
+
+
+def test_invalid_delegate_defaults_to_auto() -> None:
+    tracker = HandTracker(delegate="cuda")
+    assert tracker.delegate == "auto"
+
+
 class _Point:
     """Tiruan ``NormalizedLandmark`` MediaPipe (atribut bisa ``None``)."""
 

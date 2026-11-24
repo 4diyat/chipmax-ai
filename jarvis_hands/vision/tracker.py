@@ -116,8 +116,16 @@ def default_model_path() -> Path:
     return Path(__file__).resolve().parents[1] / "assets" / "models" / "hand_landmarker.task"
 
 
+_VALID_DELEGATES = ("auto", "gpu", "cpu")
+
+
 class HandTracker:
-    """Pembungkus MediaPipe Hand Landmarker mode VIDEO."""
+    """Pembungkus MediaPipe Hand Landmarker mode VIDEO.
+
+    Akselerator diutamakan sesuai ``delegate``:
+    ``"auto"`` coba GPU dulu lalu fallback ke CPU, ``"gpu"`` paksa GPU,
+    ``"cpu"`` paksa CPU.
+    """
 
     def __init__(
         self,
@@ -127,14 +135,17 @@ class HandTracker:
         min_detection_confidence: float = 0.5,
         min_presence_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
+        delegate: str = "auto",
     ) -> None:
         self._model_path = Path(model_path) if model_path is not None else default_model_path()
         self._num_hands = max(1, min(2, int(num_hands)))
         self._min_detection = min_detection_confidence
         self._min_presence = min_presence_confidence
         self._min_tracking = min_tracking_confidence
+        self._delegate = delegate if delegate in _VALID_DELEGATES else "auto"
         self._landmarker: Any = None
         self._mp: Any = None
+        self._delegate_used: str | None = None
 
     @property
     def model_path(self) -> Path:
@@ -145,6 +156,16 @@ class HandTracker:
     def is_loaded(self) -> bool:
         """True bila model sudah dimuat."""
         return self._landmarker is not None
+
+    @property
+    def delegate(self) -> str:
+        """Akselerator yang diminta (``auto``/``gpu``/``cpu``)."""
+        return self._delegate
+
+    @property
+    def delegate_used(self) -> str | None:
+        """Akselerator yang benar-benar dipakai setelah pemuatan model."""
+        return self._delegate_used
 
     def _ensure_loaded(self) -> None:
         if self._landmarker is not None:
@@ -163,19 +184,39 @@ class HandTracker:
         except Exception as exc:  # pragma: no cover - tergantung instalasi
             raise TrackerError(f"mediapipe tidak tersedia: {exc}") from exc
 
-        options = HandLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=str(self._model_path)),
-            running_mode=vision_task_running_mode.VisionTaskRunningMode.VIDEO,
-            num_hands=self._num_hands,
-            min_hand_detection_confidence=self._min_detection,
-            min_hand_presence_confidence=self._min_presence,
-            min_tracking_confidence=self._min_tracking,
-        )
-        try:
-            self._landmarker = HandLandmarker.create_from_options(options)
-        except Exception as exc:
-            raise TrackerError(f"gagal memuat model hand landmarker: {exc}") from exc
-        self._mp = mp
+        # Tentukan urutan delegasi: auto -> GPU dulu lalu CPU; gpu -> paksa GPU;
+        # cpu -> paksa CPU.
+        delegates: list[Any] = []
+        if self._delegate == "gpu":
+            delegates = [BaseOptions.Delegate.GPU]
+        elif self._delegate == "cpu":
+            delegates = [BaseOptions.Delegate.CPU]
+        else:
+            delegates = [BaseOptions.Delegate.GPU, BaseOptions.Delegate.CPU]
+
+        last_error: Exception | None = None
+        for delegate in delegates:
+            try:
+                options = HandLandmarkerOptions(
+                    base_options=BaseOptions(
+                        model_asset_path=str(self._model_path), delegate=delegate
+                    ),
+                    running_mode=vision_task_running_mode.VisionTaskRunningMode.VIDEO,
+                    num_hands=self._num_hands,
+                    min_hand_detection_confidence=self._min_detection,
+                    min_hand_presence_confidence=self._min_presence,
+                    min_tracking_confidence=self._min_tracking,
+                )
+                self._landmarker = HandLandmarker.create_from_options(options)
+                self._delegate_used = "gpu" if delegate is BaseOptions.Delegate.GPU else "cpu"
+                self._mp = mp
+                return
+            except Exception as exc:
+                last_error = exc
+                self._landmarker = None
+                continue
+
+        raise TrackerError(f"gagal memuat model hand landmarker: {last_error}") from last_error
 
     def detect(self, rgb: npt.NDArray[np.uint8], timestamp_ms: int) -> TrackingResult:
         """Deteksi landmark dari frame RGB uint8 (H, W, 3)."""
