@@ -94,12 +94,19 @@ jobs:
         timeout-minutes: 3
         run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_agent_settings.py
 
-      - name: Tes Gemini tanpa UI
+      - name: Tes Gemini permintaan dan validasi
         timeout-minutes: 3
         run: >-
           uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
           jarvis_hands/tests/test_gemini.py
-          -k "not bridge_thread_updates_ui and not single_flight_and_graceful_close"
+          -k "real_request_contract or invalid_prompt or model_cannot or key_required"
+
+      - name: Tes Gemini error dan respons
+        timeout-minutes: 3
+        run: >-
+          uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
+          jarvis_hands/tests/test_gemini.py
+          -k "error_codes or redirects or invalid_response or thoughts or max_token"
 
       - name: Tes Gemini pembaruan UI
         timeout-minutes: 3
