@@ -12,7 +12,7 @@ from PySide6.QtCore import QCoreApplication
 from jarvis_hands.core.config import CameraConfig
 from jarvis_hands.tests.support import make_hand, make_result
 from jarvis_hands.vision.camera import CameraController, CameraError, CameraWorker, Frame
-from jarvis_hands.vision.tracker import HandTracker, TrackingResult
+from jarvis_hands.vision.tracker import HandTracker, TrackerError, TrackingResult
 
 
 class FakeSource:
@@ -103,6 +103,29 @@ def test_worker_reports_camera_open_failure() -> None:
     assert failures == ["perangkat uji sengaja gagal"]
     assert finished == [True]
     assert not worker.is_active
+
+
+def test_worker_labels_tracker_failure_separately() -> None:
+    """Kegagalan pelacakan tidak boleh dilaporkan sebagai "kamera berhenti"."""
+
+    class BrokenTracker(HandTracker):
+        def detect(self, rgb: npt.NDArray[np.uint8], timestamp_ms: int) -> TrackingResult:
+            del rgb, timestamp_ms
+            raise TrackerError("model tidak dapat dimuat")
+
+        def close(self) -> None:
+            return None
+
+    source = FakeSource(frames=1000)
+    worker = CameraWorker(
+        CameraConfig(fps=240),
+        source_factory=lambda: source,
+        tracker_factory=BrokenTracker,
+    )
+    failures: list[str] = []
+    worker.failed.connect(failures.append)
+    worker.run()
+    assert failures == ["pelacakan tangan berhenti: model tidak dapat dimuat"]
 
 
 def test_worker_reports_missing_frames() -> None:

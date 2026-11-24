@@ -58,3 +58,103 @@ def test_model_path_property() -> None:
     tracker = HandTracker(model_path=Path("x.task"))
     assert tracker.model_path == Path("x.task")
     assert not tracker.is_loaded
+
+
+class _Point:
+    """Tiruan ``NormalizedLandmark`` MediaPipe (atribut bisa ``None``)."""
+
+    def __init__(self, x: float, y: float, z: float | None, visibility: float | None) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+        self.visibility = visibility
+
+
+class _Category:
+    def __init__(self, name: str, score: float | None) -> None:
+        self.category_name = name
+        self.score = score
+
+
+class _Result:
+    def __init__(self, landmarks: list[list[_Point]], handedness: list[list[_Category]]) -> None:
+        self.hand_landmarks = landmarks
+        self.handedness = handedness
+
+
+class _FakeLandmarker:
+    """Landmarker palsu: hasil ``detect_for_video`` sudah disiapkan tes."""
+
+    def __init__(self, result: _Result) -> None:
+        self.result = result
+
+    def detect_for_video(self, image: object, timestamp_ms: int) -> _Result:
+        del image, timestamp_ms
+        return self.result
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeMp:
+    """Tiruan modul mediapipe untuk membungkus frame menjadi "image"."""
+
+    class ImageFormat:
+        SRGB = 1
+
+    class Image:
+        def __init__(self, *, image_format: int, data: object) -> None:
+            self.image_format = image_format
+            self.data = data
+
+
+def _tracker_with(result: _Result) -> HandTracker:
+    """Tracker dengan model palsu; tidak memuat mediapipe sama sekali."""
+    tracker = HandTracker()
+    tracker._landmarker = _FakeLandmarker(result)
+    tracker._mp = _FakeMp()
+    return tracker
+
+
+def test_landmark_with_none_visibility_does_not_crash() -> None:
+    """Bug lapangan: MediaPipe mengisi visibility/z dengan None untuk hand landmark.
+
+    Sebelumnya ``float(point.visibility)`` melempar TypeError, loop kamera mati,
+    dan panduan menampilkan "kamera berhenti: float() argument must be a string
+    or a real number, not 'NoneType'".
+    """
+    points = [_Point(0.4, 0.5, None, None) for _ in range(21)]
+    tracker = _tracker_with(_Result([points], [[_Category("Right", None)]]))
+    frame = np.zeros((360, 640, 3), dtype=np.uint8)
+
+    result = tracker.detect(frame, timestamp_ms=0)
+
+    assert len(result.hands) == 1
+    hand = result.hands[0]
+    assert len(hand.landmarks) == 21
+    assert hand.landmarks[0].x == pytest.approx(0.4)
+    assert hand.landmarks[0].z == 0.0
+    assert hand.landmarks[0].visibility == 1.0  # default aman, bukan None
+    assert hand.handedness == "Right"
+    assert hand.score == 0.0
+    tracker.close()
+
+
+def test_landmark_with_nan_and_infinite_values_is_normalised() -> None:
+    points = [_Point(0.1, 0.2, float("nan"), float("inf")) for _ in range(21)]
+    tracker = _tracker_with(_Result([points], [[_Category("Left", 0.8)]]))
+    result = tracker.detect(np.zeros((8, 8, 3), dtype=np.uint8), timestamp_ms=1)
+    hand = result.hands[0]
+    assert hand.landmarks[0].z == 0.0
+    assert hand.landmarks[0].visibility == 1.0
+    assert hand.score == pytest.approx(0.8)
+    tracker.close()
+
+
+def test_missing_handedness_falls_back_to_unknown() -> None:
+    points = [_Point(0.5, 0.5, 0.0, 1.0) for _ in range(21)]
+    tracker = _tracker_with(_Result([points], []))
+    result = tracker.detect(np.zeros((8, 8, 3), dtype=np.uint8), timestamp_ms=2)
+    assert result.hands[0].handedness == "Unknown"
+    assert result.hands[0].score == 0.0
+    tracker.close()
