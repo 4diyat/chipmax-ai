@@ -77,3 +77,29 @@ jobs:
       - name: Pytest
         timeout-minutes: 10
         run: uv run python -u -m pytest -vv --color=no -o faulthandler_timeout=60
+
+  windows-package:
+    name: PyInstaller (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pasang uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sinkron dependensi packaging
+        run: uv sync --frozen --extra packaging
+
+      - name: Build executable
+        run: uv run pyinstaller --noconfirm --clean packaging/jarvis-hands.spec
+
+      - name: Unggah artefak
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-hands-windows-x64
+          path: dist/jarvis-hands
+          if-no-files-found: error

@@ -24,6 +24,9 @@ FORBIDDEN_MODULES = {
     "aiohttp",
     "tornado",
     "django",
+    "subprocess",
+    "multiprocessing",
+    "ctypes",
     "PySide6.QtNetwork",
 }
 FORBIDDEN_QUALIFIERS = {
@@ -32,8 +35,10 @@ FORBIDDEN_QUALIFIERS = {
     "QTcpSocket",
     "QUdpSocket",
     "QLocalSocket",
+    "QProcess",
 }
 FORBIDDEN_CALLS = {"eval", "exec", "__import__"}
+FORBIDDEN_ATTRIBUTE_CALLS = {"system", "popen", "startfile", "fork", "spawn"}
 
 
 def _runtime_files() -> list[Path]:
@@ -84,6 +89,8 @@ def test_runtime_never_uses_eval_exec_or_pickle() -> None:
                     and func.value.id == "pickle"
                 ):
                     offenders.append(f"{path.name}:{node.lineno} pickle.{func.attr}")
+                if isinstance(func, ast.Attribute) and func.attr in FORBIDDEN_ATTRIBUTE_CALLS:
+                    offenders.append(f"{path.name}:{node.lineno} .{func.attr}()")
             if isinstance(node, ast.Import | ast.ImportFrom) and _module_name(node) in {
                 "pickle",
                 "marshal",

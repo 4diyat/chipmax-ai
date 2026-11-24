@@ -10,6 +10,7 @@ import tempfile
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Final
 from urllib.parse import urlsplit, urlunsplit
 
 import keyring
@@ -46,6 +47,8 @@ ENV_KEYS = {
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 SERVICE = "jarvis-hands-agent"
 _MODEL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,199}$")
+#: Batas ukuran ``agent.json`` (mencegah pembacaan file raksasa dari disk).
+MAX_SETTINGS_BYTES: Final[int] = 64 * 1024
 
 
 class SettingsError(ValueError):
@@ -118,7 +121,14 @@ def load_settings(path: Path | None = None) -> AgentSettings:
         settings.validate()
         return settings
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
+        with target.open("rb") as handle:
+            raw_bytes = handle.read(MAX_SETTINGS_BYTES + 1)
+    except OSError as exc:
+        raise SettingsError("Pengaturan agen tidak dapat dibaca atau tidak valid.") from exc
+    if len(raw_bytes) > MAX_SETTINGS_BYTES:
+        raise SettingsError("Pengaturan agen terlalu besar.")
+    try:
+        data = json.loads(raw_bytes.decode("utf-8"))
         if not isinstance(data, dict) or not isinstance(data.get("models", {}), dict):
             raise SettingsError("Pengaturan agen tidak valid.")
         provider = Provider(data.get("provider", "gemini"))
@@ -145,11 +155,14 @@ def save_settings(settings: AgentSettings, path: Path | None = None) -> None:
     temp: Path | None = None
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        if len(text.encode("utf-8")) > MAX_SETTINGS_BYTES:
+            raise SettingsError("Pengaturan agen terlalu besar.")
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=target.parent, prefix=".agent-", delete=False
         ) as handle:
             temp = Path(handle.name)
-            json.dump(payload, handle, indent=2)
+            handle.write(text)
         os.replace(temp, target)
     except OSError as exc:
         raise SettingsError("Pengaturan agen tidak dapat disimpan.") from exc
@@ -157,6 +170,9 @@ def save_settings(settings: AgentSettings, path: Path | None = None) -> None:
         if temp is not None:
             with contextlib.suppress(OSError):
                 temp.unlink(missing_ok=True)
+    if os.name == "posix":
+        with contextlib.suppress(OSError):
+            target.chmod(0o600)
 
 
 class CredentialStore:

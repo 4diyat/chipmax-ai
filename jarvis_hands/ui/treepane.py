@@ -80,6 +80,7 @@ class TreePane(Panel):
         right.addWidget(self._info)
         self._preview = QPlainTextEdit()
         self._preview.setObjectName("memory-preview")
+        self._preview.setAccessibleName("Pratinjau isi memori")
         self._preview.setReadOnly(True)
         self._preview.setFont(mono_font(11))
         self._preview.setStyleSheet(

@@ -35,6 +35,7 @@ from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.card import Card, Panel
 from jarvis_hands.ui.orb import Orb
 from jarvis_hands.ui.ring import RingWidget
+from jarvis_hands.ui.settings import DisplaySettingsPage, GestureSettingsPage
 from jarvis_hands.ui.tokens import (
     FONT,
     METRICS,
@@ -146,7 +147,14 @@ COMPONENTS: Final[tuple[ComponentSpec, ...]] = (
     ComponentSpec(
         "overlay", "OverlayWindow", 5, "Overlay transparan, tembus klik, multi-monitor", ready=True
     ),
-    ComponentSpec("settings", "Settings", 7, "Layar pengaturan dan onboarding kamera"),
+    ComponentSpec(
+        "settings",
+        "Settings",
+        7,
+        "Pengaturan tampilan, kamera, gestur, dan onboarding",
+        lambda _theme: DisplaySettingsPage(AppConfig.default()),
+        True,
+    ),
 )
 
 
@@ -814,6 +822,7 @@ class CatalogWindow(QMainWindow):
         box.addWidget(self._build_toasts())
         box.addWidget(self._build_map())
         box.addWidget(self._build_phase4())
+        box.addWidget(self._build_settings())
         box.addWidget(self._build_footer())
 
     def _build_header(self) -> QWidget:
@@ -1127,6 +1136,29 @@ class CatalogWindow(QMainWindow):
         pane.setObjectName("phase4-tree")
         pane.setMinimumHeight(400)
         section.body().addWidget(pane)
+        return section
+
+    def _build_settings(self) -> QWidget:
+        section = Section(
+            "11", "Pengaturan & panduan", "Fase 7 · tampilan, kamera, gestur", self._theme
+        )
+        note = _label(
+            "Halaman pengaturan yang sama dipakai dialog Pengaturan di jendela kontrol. "
+            "Simpan menerapkan perubahan langsung; kredensial agen tetap di keyring.",
+            sans_font(12),
+            self._theme.palette.muted,
+            wrap=True,
+        )
+        section.body().addWidget(note)
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        display = DisplaySettingsPage(AppConfig.default())
+        display.setObjectName("catalog-display-settings")
+        gesture = GestureSettingsPage(AppConfig.default())
+        gesture.setObjectName("catalog-gesture-settings")
+        row.addWidget(display, 1)
+        row.addWidget(gesture, 1)
+        section.body().addLayout(row)
         return section
 
     def _build_map(self) -> QWidget:

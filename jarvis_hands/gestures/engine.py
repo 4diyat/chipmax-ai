@@ -125,6 +125,16 @@ class GestureEngine:
         self._last_explode_ts = -(10**9)
         self._last_clap_ts = -(10**9)
 
+    def set_thresholds(self, thresholds: GestureThresholds) -> None:
+        """Ganti ambang gestur saat aplikasi berjalan (tanpa membatalkan gestur)."""
+        self._thresholds = thresholds
+        self._cursor.set_thresholds(thresholds)
+
+    def set_cursor_config(self, cursor_config: CursorConfig) -> None:
+        """Ganti parameter filter kursor saat aplikasi berjalan."""
+        self._cursor_config = cursor_config
+        self._cursor.set_cursor_config(cursor_config)
+
     # ------------------------------------------------------------------ input
 
     def process(self, result: TrackingResult) -> list[GestureEvent]:

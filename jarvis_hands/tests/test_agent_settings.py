@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,7 @@ from jarvis_hands.agent import providers
 from jarvis_hands.agent.gemini import AgentError
 from jarvis_hands.agent.settings import (
     DEFAULT_MODELS,
+    MAX_SETTINGS_BYTES,
     AgentSettings,
     CredentialStore,
     Provider,
@@ -49,6 +52,18 @@ def test_settings_roundtrip_no_secrets(tmp_path: Path) -> None:
     save_settings(settings, path)
     assert load_settings(path) == settings
     assert "key" not in path.read_text(encoding="utf-8").lower()
+    if os.name == "posix":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_load_settings_rejects_oversized_file(tmp_path: Path) -> None:
+    path = tmp_path / "agent.json"
+    path.write_text(
+        '{"models": {"gemini": "' + "a" * (MAX_SETTINGS_BYTES + 16) + '"}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(SettingsError, match="terlalu besar"):
+        load_settings(path)
 
 
 @pytest.mark.parametrize(
