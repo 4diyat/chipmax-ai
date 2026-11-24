@@ -74,6 +74,26 @@ jobs:
       - name: Sinkron dependensi terkunci
         run: uv sync --frozen --extra dev
 
-      - name: Pytest
-        timeout-minutes: 8
-        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
+      - name: Kumpulkan tes
+        timeout-minutes: 3
+        run: uv run python -u -m pytest --collect-only -q
+
+      - name: Tes pengaturan agen
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_agent_settings.py
+
+      - name: Tes agen Gemini
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py
+
+      - name: Tes peluncur
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_launch_scripts.py
+
+      - name: Tes lainnya
+        timeout-minutes: 5
+        run: >-
+          uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
+          --ignore=jarvis_hands/tests/test_agent_settings.py
+          --ignore=jarvis_hands/tests/test_gemini.py
+          --ignore=jarvis_hands/tests/test_launch_scripts.py
