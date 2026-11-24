@@ -3,13 +3,15 @@
 Antarmuka kaca yang dikendalikan tangan kosong lewat webcam. Cincin adalah wajah
 JARVIS; gestur adalah jalur utama, mouse dan keyboard hanya cadangan.
 
-> **Status: Fase 0 sampai Fase 6 diimplementasikan.** Scaffold, design token Glass Stage, katalog
+> **Status: Fase 0 sampai Fase 8 diimplementasikan.** Scaffold, design token Glass Stage, katalog
 > komponen, CI, RingWidget lima status 60 fps, kamera + MediaPipe di QThread,
 > filter One-Euro, kursor 28 px, indikator kamera, jeda Ctrl+Alt+G, dan mesin
 > gestur dengan fixture landmark, Card, Panel, Orb, dan TreePane sudah jalan.
-> Overlay tiga mode, integrasi kamera–gestur, serta pengaturan dan API teks
-> Gemini, Ollama, Claude dan ChatGPT tersedia. Uji langsung tiap penyedia perlu
-> dilakukan pada perangkat dengan akses dan kredensial yang sesuai.
+> Overlay tiga mode, integrasi kamera–gestur, pengaturan tampilan/kamera/gestur,
+> onboarding kamera, auto-hide chrome, API teks Gemini/Ollama/Claude/ChatGPT,
+> profiling mikro, audit aksesibilitas, penguatan keamanan, dan packaging Windows
+> tersedia. Uji langsung tiap penyedia, kalibrasi gestur dengan tangan nyata, dan
+> smoke test executable Windows perlu dilakukan di perangkat pengguna.
 
 ## Prinsip produk
 
@@ -29,9 +31,10 @@ jarvis_hands/
   app.py                  # entry, CLI, wiring QApplication
   core/
     state.py              # Status: idle, listening, thinking, speaking, senyap
-    config.py             # konfigurasi tervalidasi, JSON atomik
+    config.py             # konfigurasi tervalidasi, JSON atomik, batas ukuran
     bus.py                # signal/slot internal (tanpa jaringan)
     hotkey.py             # Ctrl+Alt+G; pynput global atau fallback Qt
+  profiling.py            # benchmark mikro One-Euro, kursor, dan mesin gestur
   vision/
     camera.py             # kamera + pelacakan di QThread, throttle CPU
     tracker.py            # pembungkus MediaPipe Hand Landmarker
@@ -55,13 +58,18 @@ jarvis_hands/
     physics.py / orb.py   # pegas teredam dan Orb lima status
     treepane.py           # UI pohon memori dan pratinjau baca-saja
     overlay.py            # tiga mode, kontrol, perutean gestur dan monitor
-    agent_settings.py     # pengaturan provider, model dan API key
+    agent_settings.py     # halaman/dialog pengaturan provider, model dan API key
+    settings.py           # dialog pengaturan tampilan, kamera, gestur
+    onboarding.py         # panduan empat langkah: privasi, kamera, gestur
+    autohide.py           # pengatur waktu idle untuk auto-hide chrome
+    accessibility.py      # audit nama aksesibel dan target tombol
     camera.py             # CameraIndicator: aktif/jeda/mati/error
   memory/tree.py          # pembaca folder memori dan batas keamanan
   tests/                  # pytest + pytest-qt
     fixtures/landmarks/   # 9 fixture gestur (tap, drag, hold, clap, ...)
 tools/headless_qt/        # stub Qt untuk container tanpa libGL (dev saja)
-.github/workflows/ci.yml  # ruff, mypy, pytest (Linux 3.11/3.12 + Windows)
+packaging/                # spec PyInstaller dan skrip build Windows
+.github/workflows/ci.yml  # ruff, mypy, pytest, build PyInstaller Windows
 ```
 
 ## Stack dan keputusan versi
@@ -135,6 +143,9 @@ python -m jarvis_hands --mode key --key green  # latar chroma key
 python -m jarvis_hands --mode key --key '#123456' --monitor 1
 python -m jarvis_hands --camera            # secara eksplisit nyalakan saat mulai
 python -m jarvis_hands --catalog           # katalog komponen pengembang
+python -m jarvis_hands --no-onboarding     # lewati panduan awal
+python -m jarvis_hands --profile           # benchmark mikro jalur kursor/gestur
+python -m jarvis_hands --a11y-audit        # audit aksesibilitas lalu keluar
 ```
 
 Mode dan monitor dapat diganti lewat jendela kontrol. Monitor bernomor mulai 0;
@@ -191,6 +202,51 @@ uji tanpa kunci atau jaringan. Sandbox ini tidak dapat memverifikasi layanan
 cloud atau Ollama yang berjalan; uji live tiap provider dan keyring Windows perlu
 dilakukan di perangkat pengguna.
 
+## Pengaturan tampilan, kamera, gestur & onboarding
+
+Buka **Pengaturan** pada jendela kontrol. Dialog ini memiliki empat halaman:
+**Agen & API**, **Tampilan**, **Kamera**, dan **Gestur**. Perubahan hanya menjadi
+draf sampai **SIMPAN PENGATURAN** ditekan; validasi dilakukan untuk semua halaman
+sebelum `config.json` ditulis secara atomik di direktori konfigurasi platform
+(`--config` dapat mengganti lokasi). Konfigurasi sekarang selalu dimuat dari lokasi
+tersebut saat aplikasi dimulai, bukan hanya saat `--config` diberikan.
+
+- **Tampilan**: mode overlay/cermin/key, warna kunci dan hex kustom, kontras
+  tinggi, auto-hide (centang untuk menonaktifkan, jeda 1–600 detik), dan skala UI.
+  Mode dan warna kunci langsung diterapkan; kontras tinggi dan skala UI diterapkan
+  setelah aplikasi dimulai ulang.
+- **Kamera**: indeks kamera, resolusi, FPS capture, mirror, DirectShow (Windows),
+  laju analisis, skala analisis, dan batas CPU. Perubahan diterapkan saat kamera
+  dinyalakan kembali. Tombol **Buka Panduan Kamera** membuka onboarding.
+- **Gestur**: seluruh ambang `GestureThresholds` (cubit, tap, hold, drag, dua
+  tangan, clap, scrub/explode, dan jeda gestur). Relasi `pinch_close < pinch_open`
+  dan `tap_min_ms <= tap_max_ms` divalidasi. **Pulihkan Bawaan** mengembalikan
+  nilai default tanpa menyimpan.
+- **Agen & API**: halaman yang sama dengan Fase 6; key tetap di keyring dan tidak
+  pernah ditulis ke `config.json`.
+
+**Onboarding** empat langkah muncul otomatis saat `onboarding_done` bernilai
+`false` (pengguna baru). Langkah kamera menampilkan pratinjau frame di memori dan
+memakai `CameraSession` (kelas yang sama dengan aplikasi; kamera utama dihentikan
+dulu bila sedang menyala); frame dibersihkan saat kamera berhenti atau dialog
+ditutup. Langkah gestur memberi umpan balik langsung
+(`Tangan terlihat`, `cubit`, dsb.). **LEWATI** atau menyelesaikan panduan menandai
+`onboarding_done` dan menyimpan konfigurasi; bila kotak **Jangan tampilkan panduan
+ini lagi** dinonaktifkan, panduan akan muncul lagi pada peluncuran berikutnya. Panduan
+dapat dibuka kembali lewat tombol **Panduan kamera & gestur** di jendela kontrol
+atau dari halaman Kamera.
+
+**Auto-hide** menyembunyikan ring, orb, dan kartu setelah `display.auto_hide_s`
+detik tanpa aktivitas (tangan terlihat, gerak/klik mouse, mode berubah, atau
+jawaban agen). Indikator kamera **tidak pernah** ikut disembunyikan. Aktivitas
+berikutnya menampilkan chrome kembali; saat agen sedang BERPIKIR, auto-hide ditahan.
+Set `display.auto_hide_enabled` ke `false` (atau hilangkan centang di pengaturan)
+untuk mematikan auto-hide tanpa mengubah jeda.
+
+Pengaturan gestur yang baru langsung diterapkan ke mesin gestur dan filter kursor
+tanpa me-restart aplikasi; pengaturan kamera baru dipakai pada penyalakan kamera
+berikutnya.
+
 ## Tes dan kualitas
 
 ```bash
@@ -215,6 +271,19 @@ tes integrasi yang memuat model Hand Landmarker asli di QThread dan memeriksa
 SHA-256 bundel `hand_landmarker.task`; jalannya butuh ±1 detik. Mesin gestur
 diuji dengan sembilan fixture landmark di `tests/fixtures/landmarks/` (lihat
 README di folder tersebut); semua ambang gestur berasal dari `GestureThresholds`.
+
+### Profiling mikro
+
+```bash
+python -m jarvis_hands --profile
+python -m jarvis_hands --profile --profile-iterations 5000
+```
+
+Perintah ini mengukur One-Euro 2D, konversi landmark ke kursor, dan mesin gestur
+dengan landmark sintetis, lalu mencetak tabel Markdown. Jalur ini bebas Qt dan
+jaringan sehingga bisa dipakai di CI atau sebelum/sesudah mengubah ambang. Hasil
+satu mesin tidak boleh dibandingkan langsung dengan mesin lain; gunakan sebagai
+deteksi regresi pada perangkat yang sama.
 
 ## Gestur
 
@@ -256,18 +325,31 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 ## Aksesibilitas
 
 - Semua kontrol punya jalur mouse dan keyboard (tombol tetap `QPushButton`).
-- Target ketuk >= 56 px; tinggi tombol >= 44 px.
+- Target ketuk >= 56 px; tinggi tombol >= 44 px. Audit otomatis memeriksa
+  `minimumHeight` tombol dan nama aksesibel input/tombol.
 - Tema kontras tinggi (`--high-contrast`) memakai panggung hitam dan teks putih
   (rasio 21:1); teks redup tetap >= 15:1.
-- `accessibleName`/`accessibleDescription` untuk tombol, status, toast, dan
-  petunjuk.
+- `accessibleName`/`accessibleDescription` untuk tombol, status, toast, petunjuk,
+  input pengaturan, pratinjau memori, dan jawaban agen.
+- Pintasan keyboard: `Ctrl+,` membuka Pengaturan, `F1` membuka panduan kamera,
+  `Ctrl+Alt+G` menjeda gestur, `Esc` menutup dialog.
+
+```bash
+python -m jarvis_hands --a11y-audit
+```
+
+Perintah ini membangun jendela katalog, pengaturan, onboarding, dan kontrol secara
+offscreen, lalu mencetak temuan. Exit code 0 berarti tidak ada temuan pada widget
+yang diperiksa; audit ini tidak menggantikan pengujian dengan pembaca layar
+sungguhan (NVDA/JAWS/VoiceOver).
 
 ## Keamanan
 
 - Tidak ada server lokal yang dimulai aplikasi atau modul runtime yang mengimpor
-  `socket`, `http.server`, atau Qt Network; `test_security.py` memblokir pola
-  tersebut lewat AST. Klien memakai `urllib` untuk koneksi keluar saat pengguna
-  mengirim teks; Ollama dapat memakai server loopback yang sudah ada.
+  `socket`, `http.server`, `subprocess`, `ctypes`, atau Qt Network;
+  `test_security.py` memblokir pola tersebut lewat AST. Klien memakai `urllib`
+  untuk koneksi keluar saat pengguna mengirim teks; Ollama dapat memakai server
+  loopback yang sudah ada.
 - Tidak ada `eval`, `exec`, `pickle`, `marshal`, atau `shelve` di runtime.
 - Modul kamera hanya memproses frame di memori; tidak ada `cv2.imwrite`,
   `VideoWriter`, atau penyimpanan frame. `HandTracker` memuat model dari
@@ -280,7 +362,26 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
   lain (TOCTOU): gunakan akar yang hanya dapat ditulis pengguna tepercaya;
   penguatan dengan handle Windows dan pengujian adversarial masih diperlukan.
   Hard link di dalam akar juga tidak bisa dibedakan dari file biasa.
+- `config.json` dibatasi 256 KiB dan `agent.json` 64 KiB; file lebih besar ditolak
+  sebelum diparse. Kedua file ditulis atomik dan, di POSIX, diberi izin `0600`.
+  API key tidak pernah masuk ke file tersebut.
 - Tidak ada telemetri; `telemetry_consent` default `false`.
+
+## Packaging Windows
+
+Build memakai PyInstaller one-folder lewat `packaging/jarvis-hands.spec`; model
+Hand Landmarker, lisensi, dan README-nya dibundel sebagai data aplikasi. Dari
+PowerShell di folder repositori:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+```
+
+Hasilnya di `dist\jarvis-hands\jarvis-hands.exe` beserta folder `_internal`.
+Tidak ada installer, code signing, atau Auto Update. CI GitHub Actions
+menjalankan build yang sama pada Windows dan mengunggah artefak
+`jarvis-hands-windows-x64`. Uji packaging di sandbox Linux tidak mencakup
+executable Windows; lakukan smoke test di Windows 10/11 bersih sebelum rilis.
 
 ## Komponen Fase 4
 
@@ -293,6 +394,7 @@ status. TreePane menampilkan pohon malas, seleksi, dan pratinjau baca-saja.
 
 Jalankan `python -m jarvis_hands --catalog`, gulir ke bagian **10** untuk mencoba mouse,
 keyboard dan data contoh; kamera dan koneksi jaringan tidak digunakan katalog.
+Bagian **11** menampilkan halaman pengaturan tampilan dan gestur Fase 7.
 Contoh pemakaian akar riil dari aplikasi Qt: `TreePane(Path("folder-memori"))`.
 Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 
@@ -307,16 +409,20 @@ Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
 | 4 | Card/Panel/Orb/TreePane, fisika sederhana | **Selesai** |
 | 5 | Overlay tembus klik, tiga mode tampil, multi-monitor/DPI | **Selesai** |
 | 6 | Agen teks Gemini, Ollama, Claude, ChatGPT dan pengaturannya | **Diimplementasikan; uji live tertunda** |
-| 7 | Pengaturan, onboarding kamera, auto-hide | Belum |
-| 8 | Profiling, aksesibilitas, keamanan, packaging Windows | Belum |
+| 7 | Pengaturan, onboarding kamera, auto-hide | **Selesai** |
+| 8 | Profiling, aksesibilitas, keamanan, packaging Windows | **Selesai; smoke test Windows tertunda** |
 
 ## Asumsi dan risiko
 
 - `tests/` diletakkan di dalam `jarvis_hands/` sesuai struktur proyek, dan
   dikecualikan dari wheel.
-- Pengaturan Agen & API tersedia; pengaturan tampilan/kamera/gestur dan onboarding
-  lainnya tetap Fase 7. `memory_root` dipakai TreePane; bila tidak diisi, TreePane
-  menampilkan data contoh.
+- Build PyInstaller Windows hanya divalidasi lewat CI (artefak diunggah); sandbox
+  Linux tidak bisa menjalankan executable Windows. Uji smoke build, SmartScreen,
+  dan code signing tetap perlu dilakukan di Windows 10/11.
+- Pengaturan tampilan, kamera, gestur, onboarding, dan auto-hide sudah tersedia.
+  `memory_root` dipakai TreePane; bila tidak diisi, TreePane menampilkan data
+  contoh. Uji onboarding dengan webcam dan keyring Windows tetap perlu dilakukan
+  di perangkat pengguna.
 - Perilaku jendela tembus klik, DPI dan multi-monitor diuji secara otomatis di Qt
   offscreen, bukan pada compositor Windows sesungguhnya; masih perlu diuji manual
   di Windows 10/11, termasuk monitor berbeda DPI dan pelepasan monitor.

@@ -22,6 +22,11 @@ def test_config_and_high_contrast_arguments(tmp_path: Path) -> None:
     assert args.high_contrast is True
 
 
+def test_no_onboarding_argument() -> None:
+    args = build_parser().parse_args(["--no-onboarding"])
+    assert args.no_onboarding is True
+
+
 def test_version_flag() -> None:
     with pytest.raises(SystemExit) as exc:
         build_parser().parse_args(["--version"])

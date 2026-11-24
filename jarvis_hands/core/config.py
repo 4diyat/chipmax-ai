@@ -67,6 +67,9 @@ KEY_COLOR_HEX: Final[dict[KeyColor, str]] = {
     KeyColor.BLUE: "#0000FF",
 }
 
+#: Batas ukuran file konfigurasi (mencegah pembacaan file raksasa dari disk).
+MAX_CONFIG_BYTES: Final[int] = 256 * 1024
+
 _HEX_RE: Final = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
 
 
@@ -171,6 +174,8 @@ class DisplayConfig:
     custom_key_hex: str = "#FF00FF"
     high_contrast: bool = False
     auto_hide_s: int = 10
+    #: ``False`` mematikan auto-hide; ``auto_hide_s`` tetap divalidasi >= 1.
+    auto_hide_enabled: bool = True
     ui_scale: float = 1.0
 
 
@@ -234,6 +239,7 @@ class AppConfig:
                 "custom_key_hex": self.display.custom_key_hex,
                 "high_contrast": self.display.high_contrast,
                 "auto_hide_s": self.display.auto_hide_s,
+                "auto_hide_enabled": self.display.auto_hide_enabled,
                 "ui_scale": self.display.ui_scale,
             },
             "memory_root": str(self.memory_root) if self.memory_root is not None else None,
@@ -357,6 +363,9 @@ class AppConfig:
                 auto_hide_s=_int(
                     display, "auto_hide_s", 10, "display.auto_hide_s", minimum=1, maximum=600
                 ),
+                auto_hide_enabled=_bool(
+                    display, "auto_hide_enabled", True, "display.auto_hide_enabled"
+                ),
                 ui_scale=_float(
                     display, "ui_scale", 1.0, "display.ui_scale", minimum=0.5, maximum=3.0
                 ),
@@ -408,9 +417,16 @@ def load_config(path: Path | None = None) -> AppConfig:
     if not target.is_file():
         raise ConfigError(f"konfigurasi bukan file: {target}")
     try:
-        raw = target.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        with target.open("rb") as handle:
+            raw_bytes = handle.read(MAX_CONFIG_BYTES + 1)
+    except OSError as exc:
         raise ConfigError(f"tidak bisa membaca konfigurasi: {target} ({exc})") from exc
+    if len(raw_bytes) > MAX_CONFIG_BYTES:
+        raise ConfigError(f"konfigurasi terlalu besar: maksimal {MAX_CONFIG_BYTES} byte")
+    try:
+        raw = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"konfigurasi bukan UTF-8: {target} ({exc})") from exc
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -424,10 +440,10 @@ def save_config(config: AppConfig, path: Path | None = None) -> Path:
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(f".{target.name}.tmp")
-        tmp.write_text(
-            json.dumps(config.to_dict(), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+        payload = json.dumps(config.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        if len(payload.encode("utf-8")) > MAX_CONFIG_BYTES:
+            raise ConfigError(f"konfigurasi terlalu besar: maksimal {MAX_CONFIG_BYTES} byte")
+        tmp.write_text(payload, encoding="utf-8")
         os.replace(tmp, target)
     except OSError as exc:
         raise ConfigError(f"tidak bisa menyimpan konfigurasi: {target} ({exc})") from exc

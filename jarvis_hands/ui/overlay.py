@@ -8,9 +8,22 @@ kontrol terpisah tetap bisa difokuskan untuk kamera dan jalan keluar yang aman.
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QCloseEvent, QColor, QImage, QPainter, QPaintEvent, QResizeEvent, QScreen
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QImage,
+    QKeySequence,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QResizeEvent,
+    QScreen,
+    QShortcut,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -30,13 +43,15 @@ from jarvis_hands.agent.settings import LABELS, AgentSettings, SettingsError, lo
 from jarvis_hands.core.config import KEY_COLOR_HEX, AppConfig, DisplayMode, KeyColor
 from jarvis_hands.gestures.engine import GestureEngine
 from jarvis_hands.gestures.types import GestureEvent, GestureKind, GesturePhase
-from jarvis_hands.ui.agent_settings import AgentSettingsDialog
+from jarvis_hands.ui.autohide import AutoHideController
 from jarvis_hands.ui.camera import CameraIndicator
 from jarvis_hands.ui.card import Card, Panel
 from jarvis_hands.ui.cursor import CursorWidget
 from jarvis_hands.ui.glass import SurfaceHit
+from jarvis_hands.ui.onboarding import OnboardingDialog
 from jarvis_hands.ui.orb import Orb
 from jarvis_hands.ui.ring import RingWidget
+from jarvis_hands.ui.settings import SettingsDialog
 from jarvis_hands.ui.tokens import build_theme
 from jarvis_hands.ui.treepane import TreePane
 from jarvis_hands.vision.camera import Frame
@@ -63,6 +78,8 @@ class OverlayWindow(QWidget):
         self._drag: Card | Panel | None = None
         self._press_target: Card | Panel | None = None
         self._pinch_started: int | None = None
+        self._chrome_hidden = False
+        self._chrome_visible: list[tuple[QWidget, bool]] = []
         self._screen_geometry = QRect(screen.geometry())
         geo = self._screen_geometry
         self.engine = GestureEngine(
@@ -84,6 +101,7 @@ class OverlayWindow(QWidget):
         self.response_text = QPlainTextEdit()
         self.response_text.setReadOnly(True)
         self.response_text.setObjectName("agent-response-overlay")
+        self.response_text.setAccessibleName("Jawaban agen")
         self.response_text.setStyleSheet(
             "background: rgba(0, 0, 0, 100); color: #ECFFFA; border: none;"
         )
@@ -104,6 +122,12 @@ class OverlayWindow(QWidget):
         self.tree.hide()
         self.indicator = CameraIndicator(self._theme, parent=self)
         session.attach_indicator(self.indicator)
+        self.autohide = AutoHideController(
+            config.display.auto_hide_s,
+            enabled=config.display.auto_hide_enabled,
+            parent=self,
+        )
+        self.autohide.hidden_changed.connect(self._set_chrome_hidden)
         session.fps_changed.connect(self.indicator.set_fps)
         session.fps_changed.connect(self._position_indicator)
         self.hand_cursor = CursorWidget(self._theme)
@@ -152,6 +176,7 @@ class OverlayWindow(QWidget):
         if visible:
             self.show()
         self.update()
+        self.autohide.poke()
 
     def set_screen(self, screen: QScreen) -> None:
         if screen is self.screen_target:
@@ -194,6 +219,7 @@ class OverlayWindow(QWidget):
             self._layout_items()
 
     def toggle_tree(self) -> None:
+        self.autohide.poke()
         self.tree.setVisible(not self.tree.isVisible())
         if self.tree.isVisible():
             self.tree.raise_()
@@ -205,6 +231,58 @@ class OverlayWindow(QWidget):
         self.response_panel.show()
         self.response_panel.raise_()
         self.indicator.raise_()
+        self.autohide.poke()
+
+    # ------------------------------------------------------------------ settings
+
+    def apply_config(self, config: AppConfig) -> None:
+        """Terapkan pengaturan baru tanpa membatalkan sesi kamera."""
+        self.config = config
+        self.engine.set_thresholds(config.gestures)
+        self.engine.set_cursor_config(config.cursor)
+        self.autohide.set_delay_s(config.display.auto_hide_s)
+        self.autohide.set_enabled(config.display.auto_hide_enabled)
+        self.set_mode(config.display.mode)
+        self.autohide.poke()
+        self.update()
+
+    def set_autohide_hold(self, hold: bool) -> None:
+        """Tahan chrome tetap terlihat (misal saat agen sedang BERPIKIR)."""
+        self.autohide.set_hold(hold)
+
+    def _set_chrome_hidden(self, hidden: bool) -> None:
+        """Sembunyikan/tampilkan ring, orb, dan kartu; indikator tetap."""
+        if hidden == self._chrome_hidden:
+            return
+        self._chrome_hidden = hidden
+        targets: tuple[QWidget, ...] = (self.ring, self.orb, self.card)
+        if hidden:
+            self._chrome_visible = [(widget, widget.isVisible()) for widget in targets]
+            for widget in targets:
+                if widget.isVisible():
+                    widget.hide()
+        else:
+            for widget, was_visible in self._chrome_visible:
+                if was_visible:
+                    widget.show()
+                    widget.raise_()
+            self._chrome_visible = []
+        self.indicator.raise_()
+
+    # ------------------------------------------------------------------ mouse
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self.autohide.poke()
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self.autohide.poke()
+        super().mousePressEvent(event)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
+        super().showEvent(event)
+        if hasattr(self, "autohide"):
+            self.autohide.poke()
 
     def on_frame(self, frame: Frame) -> None:
         if (
@@ -294,6 +372,7 @@ class OverlayWindow(QWidget):
             return
         pos = QPoint(sample.x, sample.y)
         if sample.visible:
+            self.autohide.poke()
             self.hand_cursor.move_to(pos)
             self.hand_cursor.set_hand_visible(True)
             self.hand_cursor.set_pinch(sample.pinch, sample.pinching)
@@ -383,10 +462,19 @@ class OverlayWindow(QWidget):
 class ControlWindow(QWidget):
     """Kontrol yang dapat difokuskan, terpisah dari overlay tembus klik."""
 
-    def __init__(self, config: AppConfig, screens: list[QScreen], *, monitor: int = 0) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        screens: list[QScreen],
+        *,
+        monitor: int = 0,
+        config_path: Path | None = None,
+    ) -> None:
         super().__init__()
         if not screens or not 0 <= monitor < len(screens):
             raise ValueError("monitor tidak tersedia")
+        self._config = config
+        self._config_path = config_path
         self.session = CameraSession(config.camera, parent=self)
         try:
             agent_settings = load_settings()
@@ -395,7 +483,8 @@ class ControlWindow(QWidget):
             agent_settings = AgentSettings()
             self._settings_error = str(exc)
         self.agent = AgentBridge(parent=self, settings=agent_settings)
-        self._settings_dialog: AgentSettingsDialog | None = None
+        self._settings_dialog: SettingsDialog | None = None
+        self._onboarding: OnboardingDialog | None = None
         self._request_label = LABELS[agent_settings.provider]
         self._exit_pending = False
         self.overlay = OverlayWindow(config, self.session, screens[monitor])
@@ -439,12 +528,17 @@ class ControlWindow(QWidget):
         layout.addWidget(show_tree)
         self.provider_label = QLabel()
         layout.addWidget(self.provider_label)
-        self.settings_button = QPushButton("Pengaturan Agen & API")
+        self.settings_button = QPushButton("Pengaturan")
         self.settings_button.setObjectName("open-agent-settings")
         self.settings_button.clicked.connect(self._open_settings)
         layout.addWidget(self.settings_button)
+        guide_button = QPushButton("Panduan kamera & gestur")
+        guide_button.setObjectName("open-onboarding")
+        guide_button.clicked.connect(self._open_onboarding)
+        layout.addWidget(guide_button)
         self.prompt = QLineEdit()
         self.prompt.setObjectName("agent-prompt")
+        self.prompt.setAccessibleName("Permintaan agen")
         self.prompt.setPlaceholderText("Tulis permintaan untuk agen")
         self.prompt.setMaxLength(MAX_PROMPT_CHARS)
         self.prompt.returnPressed.connect(self._send_prompt)
@@ -457,6 +551,7 @@ class ControlWindow(QWidget):
         layout.addWidget(self.agent_status)
         self.answer = QPlainTextEdit()
         self.answer.setObjectName("agent-response")
+        self.answer.setAccessibleName("Jawaban agen")
         self.answer.setReadOnly(True)
         self.answer.setPlaceholderText("Jawaban agen akan tampil di sini")
         self.answer.setMaximumHeight(140)
@@ -478,6 +573,16 @@ class ControlWindow(QWidget):
         if isinstance(app, QApplication):
             app.screenAdded.connect(self._screens_changed)
             app.screenRemoved.connect(self._screens_changed)
+        self.mode.setAccessibleName("Mode tampilan")
+        self.monitor.setAccessibleName("Monitor tampilan")
+        for button in self.findChildren(QPushButton):
+            button.setMinimumHeight(44)
+        for combo in (self.mode, self.monitor):
+            combo.setMinimumHeight(44)
+        self._settings_shortcut = QShortcut(QKeySequence("Ctrl+,"), self)
+        self._settings_shortcut.activated.connect(self._open_settings)
+        self._guide_shortcut = QShortcut(QKeySequence("F1"), self)
+        self._guide_shortcut.activated.connect(self._open_onboarding)
         self.overlay.show()
 
     def _refresh_agent_label(self) -> None:
@@ -490,18 +595,71 @@ class ControlWindow(QWidget):
     def _open_settings(self) -> None:
         if self.agent.busy:
             return
-        dialog = AgentSettingsDialog(self.agent.settings, self.agent.store, parent=self)
+        if self._settings_dialog is not None:
+            self._settings_dialog.raise_()
+            return
+        dialog = SettingsDialog(
+            self._config,
+            self.agent.settings,
+            self.agent.store,
+            config_path=self._config_path,
+            parent=self,
+        )
         self._settings_dialog = dialog
         dialog.saved.connect(self._settings_saved)
+        dialog.agent_saved.connect(self._agent_saved)
+        dialog.onboarding_requested.connect(self._open_onboarding)
         dialog.finished.connect(self._settings_closed)
         dialog._tester.busy_changed.connect(self._settings_test_busy)
         dialog.open()
 
-    def _settings_saved(self, settings: AgentSettings) -> None:
+    def _settings_saved(self, config: AppConfig) -> None:
+        self._config = config
+        self.overlay.apply_config(config)
+        self._sync_mode_combo()
+
+    def _agent_saved(self, settings: AgentSettings) -> None:
         self.agent.settings = settings
         self._settings_error = ""
         self.send_button.setEnabled(True)
         self._refresh_agent_label()
+
+    def _open_onboarding(self) -> None:
+        if self._onboarding is not None:
+            return
+        if self.session.is_active and not self.session.stop():
+            self.status.setText("Kamera belum berhenti; coba lagi.")
+            return
+        dialog = OnboardingDialog(
+            self._config,
+            config_path=self._config_path,
+            parent=self,
+        )
+        self._onboarding = dialog
+        dialog.completed.connect(self._onboarding_done)
+        dialog.finished.connect(self._onboarding_closed)
+        dialog.open()
+
+    def _onboarding_done(self, config: AppConfig) -> None:
+        self._config = config
+        self.overlay.apply_config(config)
+        self._sync_mode_combo()
+        if self._settings_dialog is not None:
+            self._settings_dialog.apply_external_config(config)
+
+    def _onboarding_closed(self, result: int) -> None:
+        del result
+        dialog = self._onboarding
+        self._onboarding = None
+        if dialog is not None:
+            dialog.deleteLater()
+
+    def _sync_mode_combo(self) -> None:
+        index = self.mode.findData(self._config.display.mode.value)
+        if index >= 0:
+            self.mode.blockSignals(True)
+            self.mode.setCurrentIndex(index)
+            self.mode.blockSignals(False)
 
     def _settings_closed(self, result: int) -> None:
         del result
@@ -536,6 +694,7 @@ class ControlWindow(QWidget):
         self.send_button.setEnabled(not busy and not self._settings_error)
         self.settings_button.setEnabled(not busy)
         self.prompt.setEnabled(not busy)
+        self.overlay.set_autohide_hold(busy)
         if not busy and self._exit_pending:
             QTimer.singleShot(0, self.close)
 
@@ -565,6 +724,7 @@ class ControlWindow(QWidget):
         self.monitor.blockSignals(False)
 
     def _show_card(self) -> None:
+        self.overlay.autohide.poke()
         self.overlay.card.show()
         self.overlay.card.raise_()
         if self.overlay.tree.isVisible():
@@ -608,6 +768,12 @@ class ControlWindow(QWidget):
             self.status.setText("Kamera belum berhenti; coba keluar lagi.")
             event.ignore()
             return
+        if self._onboarding is not None:
+            self._onboarding.reject()
+            if self._onboarding is not None:
+                self.status.setText("Panduan belum menghentikan kamera; coba keluar lagi.")
+                event.ignore()
+                return
         if self._settings_dialog is not None and self._settings_dialog._tester.busy:
             self._exit_pending = True
             self.status.setText("Tunggu uji koneksi selesai sebelum keluar.")

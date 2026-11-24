@@ -96,6 +96,14 @@ class CursorTracker:
         self._pinching = False
         self._last = None
 
+    def set_thresholds(self, thresholds: GestureThresholds) -> None:
+        """Ganti ambang cubit (dipakai saat pengaturan gestur berubah)."""
+        self._thresholds = thresholds
+
+    def set_cursor_config(self, config: CursorConfig) -> None:
+        """Ganti parameter filter/gain (dipakai saat pengaturan kursor berubah)."""
+        self._config = config
+
     def update(self, result: TrackingResult) -> CursorSample:
         """Hitung sampel kursor dari satu hasil pelacakan."""
         hand = result.primary

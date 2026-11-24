@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from jarvis_hands.core.config import (
+    MAX_CONFIG_BYTES,
     AppConfig,
     CameraConfig,
     ConfigError,
@@ -28,6 +29,7 @@ def test_defaults_match_spec() -> None:
     assert config.display.mode is DisplayMode.OVERLAY
     assert config.display.key_color is KeyColor.MAGENTA
     assert config.display.auto_hide_s == 10
+    assert config.display.auto_hide_enabled is True
     assert config.display.high_contrast is False
     assert config.camera == CameraConfig(index=0, width=640, height=360, fps=30)
     assert config.gestures.pinch_close < config.gestures.pinch_open
@@ -62,6 +64,13 @@ def test_load_rejects_broken_json(tmp_path: Path) -> None:
     target = tmp_path / "broken.json"
     target.write_text("{bukan json", encoding="utf-8")
     with pytest.raises(ConfigError, match="rusak"):
+        load_config(target)
+
+
+def test_load_rejects_oversized_config(tmp_path: Path) -> None:
+    target = tmp_path / "big.json"
+    target.write_text('{"x": "' + "a" * (MAX_CONFIG_BYTES + 16) + '"}', encoding="utf-8")
+    with pytest.raises(ConfigError, match="terlalu besar"):
         load_config(target)
 
 
@@ -140,6 +149,11 @@ def test_invalid_values_are_rejected() -> None:
     base = AppConfig.default().to_dict()
     base["display"]["auto_hide_s"] = 0
     with pytest.raises(ConfigError, match="minimal"):
+        AppConfig.from_dict(base)
+
+    base = AppConfig.default().to_dict()
+    base["display"]["auto_hide_enabled"] = "ya"
+    with pytest.raises(ConfigError, match="boolean"):
         AppConfig.from_dict(base)
 
     base = AppConfig.default().to_dict()

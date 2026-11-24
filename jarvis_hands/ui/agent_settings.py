@@ -1,9 +1,10 @@
-"""Dialog pengaturan penyedia dan kredensial sesuai mockup Agen & API."""
+"""Halaman dan dialog pengaturan penyedia serta kredensial (mockup Agen & API)."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
@@ -34,10 +35,35 @@ from jarvis_hands.agent.settings import (
     save_settings,
 )
 
+#: Style kaca gelap bersama untuk semua halaman pengaturan.
+SETTINGS_QSS = """
+QDialog { background: #070d0f; color: #ecfffa; }
+QWidget { color: #ecfffa; }
+QLabel { color: #c2e8e1; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background: #112524; color: #ecfffa;
+    border: 1px solid #548f88; border-radius: 8px; padding: 9px; }
+QComboBox QAbstractItemView { background: #112524; color: #ecfffa; }
+QPushButton, QToolButton { background: #112524; color: #c9f9f1;
+    border: 1px solid #548f88; border-radius: 8px; padding: 10px; }
+QPushButton:checked { background: #22534e; border: 2px solid #6fe5d6; }
+QPushButton:disabled { color: #536963; border-color: #354743; }
+QCheckBox { spacing: 10px; }
+QGroupBox { border: 1px solid #35514d; border-radius: 10px; margin-top: 14px;
+    padding-top: 12px; font-weight: bold; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px;
+    color: #8ff0e4; }
+"""
 
-class AgentSettingsDialog(QDialog):
-    """Pilihan provider, model, keyring, dan uji koneksi aktual."""
 
+class AgentSettingsPage(QWidget):
+    """Pilihan provider, model, keyring, dan uji koneksi aktual.
+
+    Halaman ini bisa berdiri sendiri (:class:`AgentSettingsDialog`) maupun
+    menjadi tab di :class:`jarvis_hands.ui.settings.SettingsDialog`.
+    """
+
+    #: Pengaturan agen tersimpan (payload: :class:`AgentSettings`).
     saved = Signal(object)
 
     def __init__(
@@ -46,12 +72,10 @@ class AgentSettingsDialog(QDialog):
         store: CredentialStore,
         *,
         path: Path | None = None,
+        show_save: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Pengaturan · Agen & API")
-        self.setObjectName("agent-settings")
-        self.resize(900, 600)
         self._draft = AgentSettings(settings.provider, dict(settings.models), settings.ollama_url)
         self._store = store
         self._path = path
@@ -59,28 +83,14 @@ class AgentSettingsDialog(QDialog):
         self._tester.response.connect(self._test_success)
         self._tester.error.connect(self._test_error)
         self._tester.busy_changed.connect(self._test_busy)
-        self.setStyleSheet("""
-            QDialog { background: #070d0f; color: #ecfffa; }
-            QLabel { color: #c2e8e1; }
-            QLineEdit, QComboBox { background: #112524; color: #ecfffa;
-                border: 1px solid #548f88; border-radius: 8px; padding: 9px; }
-            QPushButton, QToolButton { background: #112524; color: #c9f9f1;
-                border: 1px solid #548f88; border-radius: 8px; padding: 10px; }
-            QPushButton:checked { background: #22534e; border: 2px solid #6fe5d6; }
-            QPushButton:disabled { color: #536963; border-color: #354743; }
-        """)
         root = QHBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 24)
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(26)
         side = QVBoxLayout()
-        heading = QLabel("PENGATURAN")
+        heading = QLabel("AGEN & API")
         heading.setStyleSheet("color: #6fe5d6; font-size: 17px; font-weight: bold;")
         side.addWidget(heading)
-        side.addWidget(QLabel("AGEN & API"))
-        for label in ("TAMPILAN · SEGERA", "KAMERA · SEGERA", "GESTUR · SEGERA"):
-            item = QLabel(label)
-            item.setStyleSheet("color: #688d87; padding-top: 14px;")
-            side.addWidget(item)
+        side.addWidget(QLabel("Penyedia teks dan kredensial"))
         side.addStretch(1)
         root.addLayout(side, 1)
         body = QVBoxLayout()
@@ -96,6 +106,7 @@ class AgentSettingsDialog(QDialog):
         for index, provider in enumerate(Provider):
             button = QPushButton(LABELS[provider])
             button.setObjectName(f"provider-{provider.value}")
+            button.setMinimumHeight(44)
             button.setCheckable(True)
             self.buttons.addButton(button, index)
             self._provider_buttons[provider] = button
@@ -110,13 +121,16 @@ class AgentSettingsDialog(QDialog):
         self.model = QComboBox()
         self.model.setEditable(True)
         self.model.setObjectName("agent-model")
+        self.model.setAccessibleName("Model agen")
         form.addRow("MODEL", self.model)
         self.url = QLineEdit()
         self.url.setObjectName("ollama-url")
+        self.url.setAccessibleName("Alamat server Ollama")
         self.url.setPlaceholderText("http://127.0.0.1:11434")
         form.addRow("ALAMAT OLLAMA", self.url)
         self.key = QLineEdit()
         self.key.setObjectName("agent-key")
+        self.key.setAccessibleName("API key")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
         self.key.setPlaceholderText("Masukkan key baru; kosongkan untuk mempertahankan")
         keyrow = QHBoxLayout()
@@ -124,6 +138,7 @@ class AgentSettingsDialog(QDialog):
         self.eye = QToolButton()
         self.eye.setText("Tampilkan")
         self.eye.setCheckable(True)
+        self.eye.setMinimumHeight(44)
         self.eye.setAccessibleName("Tampilkan atau sembunyikan API key")
         self.eye.toggled.connect(self._toggle_key)
         keyrow.addWidget(self.eye)
@@ -136,13 +151,17 @@ class AgentSettingsDialog(QDialog):
         row = QHBoxLayout()
         self.save_button = QPushButton("SIMPAN PENGATURAN")
         self.save_button.setObjectName("save-agent-settings")
+        self.save_button.setMinimumHeight(44)
         self.save_button.clicked.connect(self._save)
+        self.save_button.setVisible(show_save)
         row.addWidget(self.save_button)
         self.test_button = QPushButton("UJI KONEKSI")
         self.test_button.setObjectName("test-agent-connection")
+        self.test_button.setMinimumHeight(44)
         self.test_button.clicked.connect(self._test)
         row.addWidget(self.test_button)
         self.delete_button = QPushButton("HAPUS KEY")
+        self.delete_button.setMinimumHeight(44)
         self.delete_button.clicked.connect(self._delete)
         row.addWidget(self.delete_button)
         body.addLayout(row)
@@ -163,6 +182,8 @@ class AgentSettingsDialog(QDialog):
         root.addLayout(body, 4)
         initial = list(Provider).index(settings.provider)
         self._select_provider(initial)
+
+    # ------------------------------------------------------------------ draft
 
     def _select_provider(self, index: int) -> None:
         provider = list(Provider)[index]
@@ -211,7 +232,10 @@ class AgentSettingsDialog(QDialog):
         result.validate()
         return result
 
-    def _save(self) -> None:
+    # ------------------------------------------------------------------ actions
+
+    def _save(self) -> bool:
+        """Simpan model/penyedia dan key bila diisi; return True bila berhasil."""
         key_stored = False
         try:
             settings = self._current()
@@ -223,13 +247,14 @@ class AgentSettingsDialog(QDialog):
         except SettingsError as exc:
             note = " API key sudah disimpan di keyring." if key_stored else ""
             self.test_status.setText(str(exc) + note)
-            return
+            return False
         self._draft = settings
         self.key.clear()
         self.eye.setChecked(False)
         self._update_key_status()
         self.test_status.setText("Pengaturan disimpan.")
         self.saved.emit(settings)
+        return True
 
     def _delete(self) -> None:
         try:
@@ -268,24 +293,56 @@ class AgentSettingsDialog(QDialog):
         self.key.setEnabled(not busy)
         self.url.setEnabled(not busy and self._draft.provider is Provider.OLLAMA)
 
+
+class AgentSettingsDialog(QDialog):
+    """Dialog tunggal untuk :class:`AgentSettingsPage` (kompatibilitas Fase 6)."""
+
+    #: Pengaturan agen tersimpan (payload: :class:`AgentSettings`).
+    saved = Signal(object)
+
+    def __init__(
+        self,
+        settings: AgentSettings,
+        store: CredentialStore,
+        *,
+        path: Path | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Pengaturan · Agen & API")
+        self.setObjectName("agent-settings")
+        self.resize(900, 600)
+        self.setStyleSheet(SETTINGS_QSS)
+        self.page = AgentSettingsPage(settings, store, path=path, parent=self)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.addWidget(self.page)
+        self.page.saved.connect(self.saved)
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegasikan atribut halaman (dipakai tes dan ControlWindow)."""
+        if name == "page" or name.startswith("__"):
+            raise AttributeError(name)
+        return getattr(self.page, name)
+
     def accept(self) -> None:
-        if self._tester.busy:
-            self.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
+        if self.page._tester.busy:
+            self.page.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
             return
-        self.key.clear()
+        self.page.key.clear()
         super().accept()
 
     def reject(self) -> None:
-        if self._tester.busy:
-            self.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
+        if self.page._tester.busy:
+            self.page.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
             return
-        self.key.clear()
+        self.page.key.clear()
         super().reject()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        if self._tester.busy:
-            self.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
+        if self.page._tester.busy:
+            self.page.test_status.setText("Tunggu uji koneksi selesai sebelum menutup.")
             event.ignore()
             return
-        self.key.clear()
+        self.page.key.clear()
         super().closeEvent(event)
