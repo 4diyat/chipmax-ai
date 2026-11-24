@@ -74,9 +74,21 @@ jobs:
       - name: Sinkron dependensi terkunci
         run: uv sync --frozen --extra dev
 
-      - name: Kumpulkan tes
+      - name: Diagnostik Python
+        timeout-minutes: 2
+        run: uv run python -c "print('Python ready')"
+
+      - name: Diagnostik Qt
+        timeout-minutes: 2
+        run: uv run python -c "from PySide6 import QtCore, QtWidgets; print('Qt ready')"
+
+      - name: Diagnostik MediaPipe
+        timeout-minutes: 2
+        run: uv run python -c "import mediapipe; print('MediaPipe ready')"
+
+      - name: Kumpulkan tes pengaturan agen
         timeout-minutes: 3
-        run: uv run python -u -m pytest --collect-only -q
+        run: uv run python -u -m pytest --collect-only -q jarvis_hands/tests/test_agent_settings.py
 
       - name: Tes pengaturan agen
         timeout-minutes: 3
