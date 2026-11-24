@@ -34,6 +34,7 @@ from jarvis_hands.core.state import Status
 from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.card import Card, Panel
 from jarvis_hands.ui.orb import Orb
+from jarvis_hands.ui.qss import dialog_qss
 from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.settings import DisplaySettingsPage, GestureSettingsPage
 from jarvis_hands.ui.tokens import (
@@ -307,7 +308,7 @@ class TokenCard(QWidget):
         text.addWidget(
             _label(spec.hex_code.upper(), mono_font(FONT.small, spacing=1.2), theme.palette.text)
         )
-        text.addWidget(_label(spec.note, sans_font(11), theme.palette.muted, wrap=True))
+        text.addWidget(_label(spec.note, sans_font(FONT.label), theme.palette.muted, wrap=True))
         layout.addLayout(text, 1)
 
 
@@ -403,7 +404,7 @@ class GlassButton(QPushButton):
         self._theme = theme
         self._primary = primary
         self.setCheckable(checkable)
-        self.setFont(sans_font(13, bold=True))
+        self.setFont(sans_font(FONT.small, bold=True))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(132, 44)
@@ -432,7 +433,7 @@ class GlassButton(QPushButton):
             self._theme,
             alpha=alpha,
             border=border,
-            radius=12,
+            radius=self._theme.style.control_radius,
         )
         if self.hasFocus():
             pen = QPen(_alpha(self._theme.palette.hot_rim, 0.8), 1.0, Qt.PenStyle.DotLine)
@@ -608,7 +609,13 @@ class ToastPreview(QWidget):
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        paint_glass(painter, QRectF(self.rect()), self._theme, alpha=0.30, radius=14)
+        paint_glass(
+            painter,
+            QRectF(self.rect()),
+            self._theme,
+            alpha=0.30,
+            radius=self._theme.style.control_radius,
+        )
         pal = self._theme.palette
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(pal.teal)
@@ -616,7 +623,7 @@ class ToastPreview(QWidget):
         painter.setFont(mono_font(FONT.label))
         painter.setPen(pal.text)
         painter.drawText(QPointF(32, 26), "MODE GESTUR AKTIF")
-        painter.setFont(sans_font(10))
+        painter.setFont(sans_font(FONT.label))
         painter.setPen(pal.muted)
         painter.drawText(QPointF(32, 44), "Kamera menyala · video tidak disimpan")
         painter.end()
@@ -639,8 +646,14 @@ class HintBar(QWidget):
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        paint_glass(painter, QRectF(self.rect()), self._theme, alpha=0.24, radius=12)
-        painter.setFont(mono_font(9, spacing=2.0))
+        paint_glass(
+            painter,
+            QRectF(self.rect()),
+            self._theme,
+            alpha=0.24,
+            radius=self._theme.style.control_radius,
+        )
+        painter.setFont(mono_font(FONT.label, spacing=2.0))
         painter.setPen(self._theme.palette.muted)
         painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.TEXT)
         painter.end()
@@ -668,8 +681,10 @@ class PlaceholderCard(GlassFrame):
             )
         )
         self.box().addLayout(top)
-        self.box().addWidget(_label(spec.title, sans_font(15, bold=True), theme.palette.text))
-        note = _label(spec.note, sans_font(11), theme.palette.muted, wrap=True)
+        self.box().addWidget(
+            _label(spec.title, sans_font(FONT.small, bold=True), theme.palette.text)
+        )
+        note = _label(spec.note, sans_font(FONT.label), theme.palette.muted, wrap=True)
         note.setFixedHeight(32)
         self.box().addWidget(note)
         self.box().addStretch(1)
@@ -733,7 +748,7 @@ class PreviewCard(GlassFrame):
         holder.addWidget(content)
         holder.addStretch(1)
         self.box().addLayout(holder)
-        self.box().addWidget(_label(caption, sans_font(11), theme.palette.muted, wrap=True))
+        self.box().addWidget(_label(caption, sans_font(FONT.label), theme.palette.muted, wrap=True))
 
 
 class TypographyCard(GlassFrame):
@@ -744,7 +759,7 @@ class TypographyCard(GlassFrame):
         self.box().addWidget(_label(caps(title), mono_font(FONT.label), theme.palette.teal))
         self.box().addWidget(_label(sample, font, theme.palette.text, wrap=True))
         self.box().addStretch(1)
-        self.box().addWidget(_label(caption, sans_font(10), theme.palette.muted, wrap=True))
+        self.box().addWidget(_label(caption, sans_font(FONT.label), theme.palette.muted, wrap=True))
 
 
 class CatalogWindow(QMainWindow):
@@ -806,7 +821,7 @@ class CatalogWindow(QMainWindow):
             _label(
                 "Halaman uji bahasa visual JARVIS. Semua warna dan ukuran diambil dari token "
                 "Glass Stage; kamera tidak aktif dan tidak ada port jaringan.",
-                sans_font(13),
+                sans_font(FONT.small),
                 self._theme.palette.muted,
                 wrap=True,
             )
@@ -833,7 +848,7 @@ class CatalogWindow(QMainWindow):
         left = QVBoxLayout()
         left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(4)
-        wordmark_font = sans_font(32, bold=True)
+        wordmark_font = sans_font(FONT.display, bold=True)
         wordmark_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 6.0)
         wordmark = _label("J.A.R.V.I.S", wordmark_font, self._theme.palette.text)
         wordmark.setObjectName("wordmark")
@@ -874,7 +889,7 @@ class CatalogWindow(QMainWindow):
                 "Display",
                 "Ring & Hands",
                 sans_font(FONT.display, bold=True),
-                "Space Grotesk 30 px · judul wordmark",
+                "Space Grotesk 30 pt · judul wordmark",
                 self._theme,
             )
         )
@@ -883,7 +898,7 @@ class CatalogWindow(QMainWindow):
                 "Isi",
                 "Antarmuka kaca yang dikendalikan tangan kosong lewat webcam.",
                 sans_font(FONT.body),
-                "Space Grotesk 14 px · teks utama",
+                "Space Grotesk 14 pt · teks utama",
                 self._theme,
             )
         )
@@ -892,7 +907,7 @@ class CatalogWindow(QMainWindow):
                 "Label mono",
                 "MENDENGARKAN · 00:12:48",
                 mono_font(FONT.small, spacing=2.5),
-                "Mono 12 px · kapital · jarak 2.5 px",
+                "Mono 12 pt · kapital · jarak 2.5 px",
                 self._theme,
             )
         )
@@ -931,7 +946,7 @@ class CatalogWindow(QMainWindow):
             frame.box().addWidget(
                 _label(
                     "Highlight inset di atas · tanpa chrome kawat",
-                    sans_font(11),
+                    sans_font(FONT.label),
                     self._theme.palette.muted,
                 )
             )
@@ -956,7 +971,7 @@ class CatalogWindow(QMainWindow):
         section.body().addWidget(
             _label(
                 "Target ketuk gestur minimal 56 px; tombol bisa dipakai dengan Tab + Space.",
-                sans_font(11),
+                sans_font(FONT.label),
                 self._theme.palette.muted,
             )
         )
@@ -1039,7 +1054,7 @@ class CatalogWindow(QMainWindow):
         section.body().addWidget(
             _label(
                 "Satu QTimer 60 fps; fase animasi dihitung dari jam dinding, bukan counter frame.",
-                sans_font(11),
+                sans_font(FONT.label),
                 self._theme.palette.muted,
             )
         )
@@ -1057,7 +1072,7 @@ class CatalogWindow(QMainWindow):
         section.body().addWidget(
             _label(
                 "Animasi cincin (napas, denyut, radar, gelombang suara) aktif di RingWidget.",
-                sans_font(11),
+                sans_font(FONT.label),
                 self._theme.palette.muted,
             )
         )
@@ -1081,7 +1096,7 @@ class CatalogWindow(QMainWindow):
             _label(
                 "Indikator kamera tetap terlihat saat Mode Gestur aktif; state jeda dan error "
                 "mengikuti Ctrl+Alt+G.",
-                sans_font(11),
+                sans_font(FONT.label),
                 self._theme.palette.muted,
             )
         )
@@ -1145,17 +1160,21 @@ class CatalogWindow(QMainWindow):
         note = _label(
             "Halaman pengaturan yang sama dipakai dialog Pengaturan di jendela kontrol. "
             "Simpan menerapkan perubahan langsung; kredensial agen tetap di keyring.",
-            sans_font(12),
+            sans_font(FONT.small),
             self._theme.palette.muted,
             wrap=True,
         )
         section.body().addWidget(note)
         row = QHBoxLayout()
         row.setSpacing(16)
-        display = DisplaySettingsPage(AppConfig.default())
+        # Halaman yang sama dengan dialog Pengaturan (termasuk QSS dari token),
+        # dipakai sebagai pratinjau interaktif di katalog.
+        display = DisplaySettingsPage(AppConfig.default(), theme=self._theme)
         display.setObjectName("catalog-display-settings")
-        gesture = GestureSettingsPage(AppConfig.default())
+        display.setStyleSheet(dialog_qss(self._theme))
+        gesture = GestureSettingsPage(AppConfig.default(), theme=self._theme)
         gesture.setObjectName("catalog-gesture-settings")
+        gesture.setStyleSheet(dialog_qss(self._theme))
         row.addWidget(display, 1)
         row.addWidget(gesture, 1)
         section.body().addLayout(row)
@@ -1184,7 +1203,7 @@ class CatalogWindow(QMainWindow):
         layout.addWidget(
             _label(
                 "PRIVASI · KAMERA NONAKTIF · VIDEO TIDAK PERNAH DISIMPAN · TIDAK ADA PORT JARINGAN",
-                mono_font(9, spacing=2.0),
+                mono_font(FONT.label, spacing=2.0),
                 self._theme.palette.muted,
                 align=Qt.AlignmentFlag.AlignCenter,
             )

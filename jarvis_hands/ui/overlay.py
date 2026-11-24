@@ -43,6 +43,7 @@ from jarvis_hands.agent.settings import LABELS, AgentSettings, SettingsError, lo
 from jarvis_hands.core.config import KEY_COLOR_HEX, AppConfig, DisplayMode, KeyColor
 from jarvis_hands.gestures.engine import GestureEngine
 from jarvis_hands.gestures.types import GestureEvent, GestureKind, GesturePhase
+from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.autohide import AutoHideController
 from jarvis_hands.ui.camera import CameraIndicator
 from jarvis_hands.ui.card import Card, Panel
@@ -50,9 +51,10 @@ from jarvis_hands.ui.cursor import CursorWidget
 from jarvis_hands.ui.glass import SurfaceHit
 from jarvis_hands.ui.onboarding import OnboardingDialog
 from jarvis_hands.ui.orb import Orb
+from jarvis_hands.ui.qss import dialog_qss
 from jarvis_hands.ui.ring import RingWidget
 from jarvis_hands.ui.settings import SettingsDialog
-from jarvis_hands.ui.tokens import build_theme
+from jarvis_hands.ui.tokens import FONT, build_theme, mono_font
 from jarvis_hands.ui.treepane import TreePane
 from jarvis_hands.vision.camera import Frame
 from jarvis_hands.vision.session import CameraSession
@@ -102,9 +104,7 @@ class OverlayWindow(QWidget):
         self.response_text.setReadOnly(True)
         self.response_text.setObjectName("agent-response-overlay")
         self.response_text.setAccessibleName("Jawaban agen")
-        self.response_text.setStyleSheet(
-            "background: rgba(0, 0, 0, 100); color: #ECFFFA; border: none;"
-        )
+        self._style_response_text()
         self.response_panel.body().addWidget(self.response_text, 1)
         self.response_panel.close_requested.connect(self.response_panel.hide)
         self.response_panel.hide()
@@ -243,7 +243,31 @@ class OverlayWindow(QWidget):
         self.autohide.set_delay_s(config.display.auto_hide_s)
         self.autohide.set_enabled(config.display.auto_hide_enabled)
         self.set_mode(config.display.mode)
+        if config.display.high_contrast != self._theme.high_contrast:
+            self._theme = build_theme(config.display.high_contrast)
+            self._apply_theme_to_children()
         self.autohide.poke()
+        self.update()
+
+    def _style_response_text(self) -> None:
+        """Terapkan palet theme ke kotak jawaban agen."""
+        stage = self._theme.palette.stage
+        self.response_text.setStyleSheet(
+            f"background: rgba({stage.red()}, {stage.green()}, {stage.blue()}, 0.45); "
+            f"color: {self._theme.palette.text.name()}; border: none;"
+        )
+
+    def _apply_theme_to_children(self) -> None:
+        """Sebarkan theme (misal kontras tinggi) ke semua chrome overlay."""
+        self.ring.set_theme(self._theme)
+        self.orb.set_theme(self._theme)
+        self.card.set_theme(self._theme)
+        self.response_panel.set_theme(self._theme)
+        self.tree.set_theme(self._theme)
+        self.indicator.set_theme(self._theme)
+        self.hand_cursor.set_theme(self._theme)
+        self._style_response_text()
+        self.setStyleSheet(dialog_qss(self._theme))
         self.update()
 
     def set_autohide_hold(self, hold: bool) -> None:
@@ -307,7 +331,7 @@ class OverlayWindow(QWidget):
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
             painter.fillRect(self.rect(), Qt.GlobalColor.transparent)
         elif self.mode is DisplayMode.MIRROR:
-            painter.fillRect(self.rect(), QColor("#070d0f"))
+            painter.fillRect(self.rect(), self._theme.palette.stage)
             if not self._image.isNull():
                 painter.drawImage(QRectF(self.rect()), self._image)
         elif self.mode is DisplayMode.KEY:
@@ -475,6 +499,7 @@ class ControlWindow(QWidget):
             raise ValueError("monitor tidak tersedia")
         self._config = config
         self._config_path = config_path
+        self._theme = build_theme(config.display.high_contrast)
         self.session = CameraSession(config.camera, parent=self)
         try:
             agent_settings = load_settings()
@@ -494,8 +519,12 @@ class ControlWindow(QWidget):
         self.agent.status_changed.connect(self.overlay.orb.set_status)
         self.setWindowTitle("JARVIS · kontrol")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setStyleSheet(dialog_qss(self._theme))
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("JARVIS · kontrol lokal"))
+        self.heading = QLabel("JARVIS · KONTROL LOKAL")
+        self.heading.setFont(mono_font(FONT.body))
+        self.heading.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
+        layout.addWidget(self.heading)
         self.status = QLabel("Kamera mati · aktifkan hanya bila diperlukan")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -575,10 +604,7 @@ class ControlWindow(QWidget):
             app.screenRemoved.connect(self._screens_changed)
         self.mode.setAccessibleName("Mode tampilan")
         self.monitor.setAccessibleName("Monitor tampilan")
-        for button in self.findChildren(QPushButton):
-            button.setMinimumHeight(44)
-        for combo in (self.mode, self.monitor):
-            combo.setMinimumHeight(44)
+        enforce_min_targets(self)
         self._settings_shortcut = QShortcut(QKeySequence("Ctrl+,"), self)
         self._settings_shortcut.activated.connect(self._open_settings)
         self._guide_shortcut = QShortcut(QKeySequence("F1"), self)
@@ -603,6 +629,7 @@ class ControlWindow(QWidget):
             self.agent.settings,
             self.agent.store,
             config_path=self._config_path,
+            theme=self._theme,
             parent=self,
         )
         self._settings_dialog = dialog
@@ -615,6 +642,8 @@ class ControlWindow(QWidget):
 
     def _settings_saved(self, config: AppConfig) -> None:
         self._config = config
+        self.session.set_config(config.camera)
+        self._apply_theme(config.display.high_contrast)
         self.overlay.apply_config(config)
         self._sync_mode_combo()
 
@@ -633,6 +662,7 @@ class ControlWindow(QWidget):
         dialog = OnboardingDialog(
             self._config,
             config_path=self._config_path,
+            theme=self._theme,
             parent=self,
         )
         self._onboarding = dialog
@@ -642,10 +672,21 @@ class ControlWindow(QWidget):
 
     def _onboarding_done(self, config: AppConfig) -> None:
         self._config = config
+        self.session.set_config(config.camera)
+        self._apply_theme(config.display.high_contrast)
         self.overlay.apply_config(config)
         self._sync_mode_combo()
         if self._settings_dialog is not None:
             self._settings_dialog.apply_external_config(config)
+
+    def _apply_theme(self, high_contrast: bool) -> None:
+        """Ganti tema jendela kontrol bila flag kontras tinggi berubah."""
+        if high_contrast == self._theme.high_contrast:
+            return
+        self._theme = build_theme(high_contrast)
+        self.setStyleSheet(dialog_qss(self._theme))
+        self.heading.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
+        self.update()
 
     def _onboarding_closed(self, result: int) -> None:
         del result

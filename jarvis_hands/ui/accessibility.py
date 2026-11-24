@@ -28,6 +28,7 @@ __all__ = [
     "AuditIssue",
     "audit_application",
     "audit_widget",
+    "enforce_min_targets",
     "format_issues",
 ]
 
@@ -95,15 +96,40 @@ def audit_widget(root: QWidget) -> list[AuditIssue]:
                         f"Tinggi minimum {widget.minimumHeight()} < {MIN_BUTTON_HEIGHT} px.",
                     )
                 )
-        elif isinstance(widget, _INPUT_TYPES) and not widget.accessibleName().strip():
-            issues.append(
-                AuditIssue(
-                    _describe(widget),
-                    "missing-name",
-                    "Input tidak punya accessibleName.",
+        elif isinstance(widget, _INPUT_TYPES):
+            if not widget.accessibleName().strip():
+                issues.append(
+                    AuditIssue(
+                        _describe(widget),
+                        "missing-name",
+                        "Input tidak punya accessibleName.",
+                    )
                 )
-            )
+            if widget.minimumHeight() < MIN_BUTTON_HEIGHT:
+                issues.append(
+                    AuditIssue(
+                        _describe(widget),
+                        "small-target",
+                        f"Tinggi minimum input {widget.minimumHeight()} < {MIN_BUTTON_HEIGHT} px.",
+                    )
+                )
     return issues
+
+
+def enforce_min_targets(root: QWidget) -> None:
+    """Pastikan tombol dan input di bawah ``root`` minimal 44 px tinggi.
+
+    Dipanggil di akhir konstruktor halaman/dialog supaya target ketuk konsisten
+    even jika stylesheet belum diterapkan (mis. widget belum ditampilkan).
+    """
+    for widget in root.findChildren(QWidget):
+        if _is_internal(widget):
+            continue
+        if (
+            isinstance(widget, (QAbstractButton, *_INPUT_TYPES))
+            and widget.minimumHeight() < MIN_BUTTON_HEIGHT
+        ):
+            widget.setMinimumHeight(MIN_BUTTON_HEIGHT)
 
 
 def format_issues(issues: list[AuditIssue]) -> str:

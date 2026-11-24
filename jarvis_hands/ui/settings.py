@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QColor
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -46,7 +46,10 @@ from jarvis_hands.core.config import (
     normalize_hex,
     save_config,
 )
-from jarvis_hands.ui.agent_settings import SETTINGS_QSS, AgentSettingsPage
+from jarvis_hands.ui.accessibility import enforce_min_targets
+from jarvis_hands.ui.agent_settings import AgentSettingsPage
+from jarvis_hands.ui.qss import dialog_qss, style_form_labels
+from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font
 
 __all__ = [
     "CameraSettingsPage",
@@ -56,11 +59,23 @@ __all__ = [
 ]
 
 
+def _rgba(color: QColor, alpha: float) -> str:
+    """QColor + alpha menjadi ``rgba(...)`` untuk stylesheet."""
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {max(0.0, min(1.0, alpha)):.3f})"
+
+
 class DisplaySettingsPage(QWidget):
     """Mode tampilan, warna kunci, kontras, auto-hide, dan skala UI."""
 
-    def __init__(self, config: AppConfig, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        theme: Theme | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._theme = theme or build_theme()
         self._config = config
         form = QFormLayout(self)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -86,7 +101,7 @@ class DisplaySettingsPage(QWidget):
         form.addRow("HEX KUSTOM", self.custom_hex)
         self.high_contrast = QCheckBox("Kontras tinggi")
         self.high_contrast.setObjectName("display-high-contrast")
-        form.addRow(self.high_contrast)
+        form.addRow("KONTRAS", self.high_contrast)
         self.auto_hide_enabled = QCheckBox("Sembunyikan chrome saat idle")
         self.auto_hide_enabled.setObjectName("display-auto-hide")
         form.addRow("AUTO-HIDE", self.auto_hide_enabled)
@@ -108,8 +123,9 @@ class DisplaySettingsPage(QWidget):
             "diterapkan setelah aplikasi dimulai ulang."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #f5c269;")
+        note.setStyleSheet(f"color: {self._theme.palette.warning.name()};")
         form.addRow(note)
+        style_form_labels(form)
         self.mode.setAccessibleName("Mode tampilan")
         self.key_color.setAccessibleName("Warna kunci chroma key")
         self.custom_hex.setAccessibleName("Hex warna kunci kustom")
@@ -118,6 +134,7 @@ class DisplaySettingsPage(QWidget):
         self.auto_hide_s.setAccessibleName("Jeda auto-hide dalam detik")
         self.ui_scale.setAccessibleName("Skala UI")
         self.load(config)
+        enforce_min_targets(self)
 
     # ------------------------------------------------------------------ state
 
@@ -169,8 +186,15 @@ class CameraSettingsPage(QWidget):
     #: Pengguna meminta panduan kamera dibuka dari pengaturan.
     onboarding_requested = Signal()
 
-    def __init__(self, config: AppConfig, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        theme: Theme | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._theme = theme or build_theme()
         self._config = config
         form = QFormLayout(self)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -199,13 +223,13 @@ class CameraSettingsPage(QWidget):
         form.addRow("LAJU CAPTURE", self.fps)
         self.mirror = QCheckBox("Cermin (mirror)")
         self.mirror.setObjectName("camera-mirror")
-        form.addRow(self.mirror)
+        form.addRow("CERMIN", self.mirror)
         self.use_dshow = QCheckBox("DirectShow (hanya Windows)")
         self.use_dshow.setObjectName("camera-dshow")
         self.use_dshow.setEnabled(sys.platform == "win32")
         if sys.platform != "win32":
             self.use_dshow.setToolTip("Opsi ini hanya berlaku pada Windows.")
-        form.addRow(self.use_dshow)
+        form.addRow("DIRECTSHOW", self.use_dshow)
         self.analysis_fps = QSpinBox()
         self.analysis_fps.setObjectName("camera-analysis-fps")
         self.analysis_fps.setRange(1, 120)
@@ -229,13 +253,14 @@ class CameraSettingsPage(QWidget):
             "Frame diproses lokal dan tidak pernah disimpan."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #f5c269;")
+        note.setStyleSheet(f"color: {self._theme.palette.warning.name()};")
         form.addRow(note)
         self.guide_button = QPushButton("BUKA PANDUAN KAMERA")
         self.guide_button.setObjectName("open-camera-onboarding")
         self.guide_button.setMinimumHeight(44)
         self.guide_button.clicked.connect(self._request_onboarding)
         form.addRow(self.guide_button)
+        style_form_labels(form)
         self.index.setAccessibleName("Indeks kamera")
         self.frame_width.setAccessibleName("Lebar frame kamera")
         self.frame_height.setAccessibleName("Tinggi frame kamera")
@@ -246,6 +271,7 @@ class CameraSettingsPage(QWidget):
         self.analysis_scale.setAccessibleName("Skala analisis kamera")
         self.max_cpu.setAccessibleName("Batas CPU kamera")
         self.load(config)
+        enforce_min_targets(self)
 
     def load(self, config: AppConfig) -> None:
         self._config = config
@@ -285,8 +311,15 @@ class CameraSettingsPage(QWidget):
 class GestureSettingsPage(QWidget):
     """Ambang gestur lengkap; semua nilai divalidasi ulang saat menyimpan."""
 
-    def __init__(self, config: AppConfig, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        theme: Theme | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._theme = theme or build_theme()
         self._config = config
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -303,6 +336,7 @@ class GestureSettingsPage(QWidget):
         self._add_int(pinch_form, "tap_max_ms", "KETUK MAKSIMUM", 1, 2000, " ms")
         self._add_int(pinch_form, "hold_ms", "TAHAN", 100, 5000, " ms")
         self._add_float(pinch_form, "drag_start_px", "MULAI SERET", 0.0, 200.0, 1.0, " px")
+        style_form_labels(pinch_form)
         root.addWidget(pinch)
 
         hands = QGroupBox("Dua tangan")
@@ -317,6 +351,7 @@ class GestureSettingsPage(QWidget):
         self._add_float(
             hands_form, "explode_min_speed_px_s", "KECEPATAN EXPLODE", 0.0, 5000.0, 10.0, " px/s"
         )
+        style_form_labels(hands_form)
         root.addWidget(hands)
 
         scrub = QGroupBox("Scrub & jeda")
@@ -326,6 +361,7 @@ class GestureSettingsPage(QWidget):
         self._add_int(scrub_form, "scrub_reversals", "JUMLAH PEMBALIKAN", 1, 20, "×")
         self._add_float(scrub_form, "scrub_explode_px", "RENTANG SCRUB", 0.0, 500.0, 1.0, " px")
         self._add_int(scrub_form, "gesture_cooldown_ms", "JEDA GESTUR", 0, 5000, " ms")
+        style_form_labels(scrub_form)
         root.addWidget(scrub)
 
         row = QHBoxLayout()
@@ -341,10 +377,11 @@ class GestureSettingsPage(QWidget):
             "Kalibrasi dengan tangan nyata; nilai default sudah diuji fixture sintetis."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #f5c269;")
+        note.setStyleSheet(f"color: {self._theme.palette.warning.name()};")
         root.addWidget(note)
         root.addStretch(1)
         self.load(config)
+        enforce_min_targets(self)
 
     # ------------------------------------------------------------------ build
 
@@ -448,16 +485,18 @@ class SettingsDialog(QDialog):
         *,
         config_path: Path | None = None,
         agent_path: Path | None = None,
+        theme: Theme | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
         self._config_path = config_path
         self._agent_path = agent_path
+        self._theme = theme or build_theme(config.display.high_contrast)
         self.setWindowTitle("Pengaturan · JARVIS")
         self.setObjectName("settings-dialog")
-        self.resize(980, 660)
-        self.setStyleSheet(SETTINGS_QSS)
+        self.resize(980, 700)
+        self.setStyleSheet(dialog_qss(self._theme))
 
         root = QHBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
@@ -465,7 +504,8 @@ class SettingsDialog(QDialog):
         side = QVBoxLayout()
         side.setSpacing(6)
         heading = QLabel("PENGATURAN")
-        heading.setStyleSheet("color: #6fe5d6; font-size: 17px; font-weight: bold;")
+        heading.setFont(mono_font(FONT.body))
+        heading.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
         side.addWidget(heading)
         self._nav = QButtonGroup(self)
         self._nav.setExclusive(True)
@@ -493,11 +533,17 @@ class SettingsDialog(QDialog):
         body.setSpacing(14)
         self.pages = QStackedWidget()
         self.agent_page = AgentSettingsPage(
-            agent_settings, store, path=agent_path, show_save=False, parent=self
+            agent_settings,
+            store,
+            path=agent_path,
+            show_save=False,
+            embedded=True,
+            theme=self._theme,
+            parent=self,
         )
-        self.display_page = DisplaySettingsPage(config, parent=self)
-        self.camera_page = CameraSettingsPage(config, parent=self)
-        self.gesture_page = GestureSettingsPage(config, parent=self)
+        self.display_page = DisplaySettingsPage(config, theme=self._theme, parent=self)
+        self.camera_page = CameraSettingsPage(config, theme=self._theme, parent=self)
+        self.gesture_page = GestureSettingsPage(config, theme=self._theme, parent=self)
         self.gesture_scroll = QScrollArea()
         self.gesture_scroll.setWidgetResizable(True)
         self.gesture_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -590,7 +636,8 @@ class SettingsDialog(QDialog):
 
     def _set_status(self, text: str, *, error: bool = False) -> None:
         self.status.setText(text)
-        self.status.setStyleSheet("color: #f5a524;" if error else "color: #8ff0e4;")
+        color = self._theme.palette.warning if error else self._theme.palette.accent
+        self.status.setStyleSheet(f"color: {color.name()};")
 
     def accept(self) -> None:
         if self.agent_page._tester.busy:

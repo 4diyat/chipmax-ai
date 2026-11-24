@@ -60,6 +60,16 @@ class CursorWidget(QWidget):
         self._fill = with_alpha(palette.teal, 0.85)
         self._dwell_color = with_alpha(palette.hot_rim, 0.95)
 
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang kursor."""
+        self._theme = theme
+        palette = theme.palette
+        self._ring = with_alpha(palette.accent, 0.92)
+        self._ring_dim = with_alpha(palette.muted, 0.35)
+        self._fill = with_alpha(palette.teal, 0.85)
+        self._dwell_color = with_alpha(palette.hot_rim, 0.95)
+        self.update()
+
     # ------------------------------------------------------------------ state
 
     @property

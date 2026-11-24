@@ -81,6 +81,11 @@ class Orb(QWidget):
         self.setAccessibleName("Orb JARVIS")
         self._update_accessible()
 
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang orb."""
+        self._theme = theme
+        self.update()
+
     # ------------------------------------------------------------------ state
 
     @property

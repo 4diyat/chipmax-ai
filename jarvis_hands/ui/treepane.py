@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -18,8 +18,17 @@ from PySide6.QtWidgets import (
 )
 
 from jarvis_hands.memory.tree import MemoryNode, MemoryPathError, MemoryTree, NodeKind, format_size
+from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.card import Panel
-from jarvis_hands.ui.tokens import Theme, build_theme, mono_font, sans_font
+from jarvis_hands.ui.tokens import (
+    FONT,
+    METRICS,
+    Theme,
+    build_theme,
+    mono_font,
+    sans_font,
+    with_alpha,
+)
 
 
 class TreePane(Panel):
@@ -56,52 +65,67 @@ class TreePane(Panel):
         self._list.setMinimumWidth(240)
         self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._list.setUniformRowHeights(True)
-        self._list.setFont(sans_font(13))
-        pal = self._tree_theme.palette
-        self._list.setStyleSheet(
-            f"QTreeWidget {{ background: transparent; color: {pal.text.name()}; border: none; }}"
-            f"QTreeWidget::item {{ min-height: 48px; padding-left: 6px; }}"
-            f"QTreeWidget::item:selected {{ background: rgba(40, 160, 150, 90); "
-            f"border-left: 3px solid {pal.teal.name()}; }}"
-        )
+        self._list.setFont(sans_font(FONT.small))
         self._list.itemExpanded.connect(self._expanded)
         self._list.itemSelectionChanged.connect(self._select)
         row.addWidget(self._list, 3)
         right = QVBoxLayout()
         self._path = QLabel("memori")
         self._path.setObjectName("memory-path")
-        self._path.setFont(mono_font(11))
+        self._path.setFont(mono_font(FONT.label))
         self._path.setWordWrap(True)
-        self._path.setStyleSheet(f"color: {pal.teal.name()};")
         right.addWidget(self._path)
         self._info = QLabel("Pilih berkas untuk pratinjau")
-        self._info.setFont(sans_font(13, bold=True))
-        self._info.setStyleSheet(f"color: {pal.text.name()};")
+        self._info.setFont(sans_font(FONT.small, bold=True))
         right.addWidget(self._info)
         self._preview = QPlainTextEdit()
         self._preview.setObjectName("memory-preview")
         self._preview.setAccessibleName("Pratinjau isi memori")
         self._preview.setReadOnly(True)
-        self._preview.setFont(mono_font(11))
-        self._preview.setStyleSheet(
-            f"background: rgba(0, 0, 0, 55); color: {pal.muted.name()}; "
-            "border: 1px solid rgba(80, 180, 170, 60); border-radius: 10px; padding: 8px;"
-        )
+        self._preview.setFont(mono_font(FONT.label))
         right.addWidget(self._preview, 1)
         warning = QLabel("PATH TRAVERSAL DITOLAK · SYMLINK LUAR ROOT DITOLAK")
         warning.setObjectName("memory-safety")
         warning.setWordWrap(True)
-        warning.setFont(mono_font(9))
-        warning.setStyleSheet(f"color: {pal.muted.name()};")
+        warning.setFont(mono_font(FONT.label))
+        self._safety = warning
         right.addWidget(warning)
         row.addLayout(right, 2)
         self.body().addLayout(row, 1)
+        self._list_stylesheet()
         self._populate()
+        enforce_min_targets(self)
 
     @property
     def memory(self) -> MemoryTree | None:
         """Backend riil, atau None jika memakai data demonstrasi."""
         return self._memory
+
+    def _list_stylesheet(self) -> None:
+        """Terapkan palet theme ke pohon, pratinjau, dan label sisi kanan."""
+        pal = self._tree_theme.palette
+        self._list.setStyleSheet(
+            f"QTreeWidget {{ background: transparent; color: {pal.text.name()}; border: none; }}"
+            f"QTreeWidget::item {{ min-height: {METRICS.min_target}px; padding-left: 6px; }}"
+            f"QTreeWidget::item:selected {{ background: "
+            f"{with_alpha(pal.teal, 0.35).name(QColor.NameFormat.HexArgb)}; "
+            f"border-left: 3px solid {pal.teal.name()}; }}"
+        )
+        self._path.setStyleSheet(f"color: {pal.teal.name()};")
+        self._info.setStyleSheet(f"color: {pal.text.name()};")
+        self._preview.setStyleSheet(
+            f"background: {with_alpha(pal.stage, 0.55).name(QColor.NameFormat.HexArgb)}; "
+            f"color: {pal.muted.name()}; "
+            f"border: 1px solid {with_alpha(pal.border, 0.35).name(QColor.NameFormat.HexArgb)}; "
+            f"border-radius: {self._tree_theme.style.control_radius:.0f}px; padding: 8px;"
+        )
+        self._safety.setStyleSheet(f"color: {pal.muted.name()};")
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang pohon."""
+        self._tree_theme = theme
+        super().set_theme(theme)
+        self._list_stylesheet()
 
     def _add(self, node: MemoryNode, parent: QTreeWidgetItem | None = None) -> QTreeWidgetItem:
         item = QTreeWidgetItem([node.name])

@@ -66,6 +66,17 @@ class CameraIndicator(QWidget):
         self._update_accessible()
         self._apply_size()
 
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang indikator."""
+        self._theme = theme
+        palette = theme.palette
+        self._active_color = palette.teal
+        self._warning_color = palette.warning
+        self._off_color = with_alpha(palette.muted, 0.75)
+        self._text_color = palette.text
+        self._muted_color = palette.muted
+        self.update()
+
     # ------------------------------------------------------------------ state
 
     @property

@@ -45,3 +45,30 @@ def test_a11y_cli_reports_clean(qapp: Any, capsys: Any) -> None:
     del qapp
     assert main(["--a11y-audit"]) == 0
     assert "tidak ada temuan" in capsys.readouterr().out
+
+
+def test_enforce_min_targets_raises_inputs(qapp: Any) -> None:
+    del qapp
+    from PySide6.QtWidgets import QLineEdit, QVBoxLayout
+
+    from jarvis_hands.ui.accessibility import enforce_min_targets
+
+    root = QWidget()
+    layout = QVBoxLayout(root)
+    edit = QLineEdit(root)
+    edit.setAccessibleName("Uji")
+    layout.addWidget(edit)
+    assert edit.minimumHeight() < MIN_BUTTON_HEIGHT
+    enforce_min_targets(root)
+    assert edit.minimumHeight() == MIN_BUTTON_HEIGHT
+    assert audit_widget(root) == []
+
+
+def test_tree_rows_meet_min_target(qapp: Any) -> None:
+    del qapp
+    from jarvis_hands.ui.tokens import METRICS
+    from jarvis_hands.ui.treepane import TreePane
+
+    pane = TreePane()
+    assert f"min-height: {METRICS.min_target}px" in pane._list.styleSheet()
+    pane.close()
