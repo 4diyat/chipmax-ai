@@ -31,6 +31,25 @@ class TrackerError(RuntimeError):
     """Tracker tidak dapat dibuat atau dijalankan."""
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    """Konversi atribut MediaPipe ke float yang aman.
+
+    Protobuf MediaPipe mengisi ``NormalizedLandmark.visibility``/``presence``
+    dengan ``None`` bila opsinya tidak meminta field tersebut, sehingga
+    ``float(value)`` melempar TypeError dan mematikan loop kamera. Nilai yang
+    hilang, bukan angka, atau NaN dikembalikan sebagai ``default``.
+    """
+    if value is None:
+        return default
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(result) or math.isinf(result):
+        return default
+    return result
+
+
 @dataclass(frozen=True)
 class Landmark:
     """Satu landmark tangan dalam koordinat normalisasi 0..1."""
@@ -178,10 +197,10 @@ class HandTracker:
         for index, points in enumerate(landmark_lists):
             landmarks = tuple(
                 Landmark(
-                    x=float(point.x),
-                    y=float(point.y),
-                    z=float(point.z),
-                    visibility=float(point.visibility),
+                    x=_to_float(getattr(point, "x", None)),
+                    y=_to_float(getattr(point, "y", None)),
+                    z=_to_float(getattr(point, "z", None)),
+                    visibility=_to_float(getattr(point, "visibility", None), 1.0),
                 )
                 for point in points
             )
@@ -189,8 +208,8 @@ class HandTracker:
             score = 0.0
             if index < len(handedness_lists) and handedness_lists[index]:
                 category = handedness_lists[index][0]
-                handedness = str(getattr(category, "category_name", "Unknown"))
-                score = float(getattr(category, "score", 0.0))
+                handedness = str(getattr(category, "category_name", "Unknown") or "Unknown")
+                score = _to_float(getattr(category, "score", None))
             hands.append(HandObservation(landmarks=landmarks, handedness=handedness, score=score))
         return TrackingResult(
             hands=tuple(hands),

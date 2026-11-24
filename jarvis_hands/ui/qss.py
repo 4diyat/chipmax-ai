@@ -97,6 +97,29 @@ QPushButton, QToolButton {{
     border: 1px solid {_rgba(border, 0.55)}; border-radius: {radius:.0f}px;
     padding: 0 16px; min-height: 44px;
 }}
+QPushButton[nav="true"] {{
+    text-align: left; padding-left: 14px;
+}}
+QPushButton[nav="true"]:checked {{
+    border-left: 3px solid {teal};
+}}
+QPushButton[nav="true"][current="true"] {{
+    background: {_rgba(teal, 0.22)}; border: 1px solid {teal}; color: {hot_rim};
+}}
+QPushButton[nav="true"][current="true"]:hover {{
+    background: {_rgba(teal, 0.28)};
+}}
+QPushButton[provider="true"]:checked {{
+    background: {_rgba(teal, 0.22)}; border: 1px solid {teal}; color: {hot_rim};
+    font-weight: bold;
+}}
+QPushButton[primary="true"] {{
+    background: {_rgba(teal, 0.20)}; border: 1px solid {teal}; color: {hot_rim};
+    font-weight: bold;
+}}
+QPushButton[primary="true"]:hover {{
+    background: {_rgba(teal, 0.30)};
+}}
 QPushButton:hover, QToolButton:hover {{
     background: {_rgba(teal, 0.16)}; border-color: {teal};
 }}

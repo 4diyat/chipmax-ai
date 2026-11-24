@@ -596,14 +596,49 @@ class CursorPreview(QWidget):
 
 
 class ToastPreview(QWidget):
-    """Toast kecil kanan atas; teks pendek, dua baris."""
+    """Toast kecil kanan atas; satu judul mono + satu baris keterangan."""
 
-    def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
+    TITLE = "MODE GESTUR AKTIF"
+    DETAIL = "Kamera menyala · video tidak disimpan"
+
+    def __init__(
+        self,
+        theme: Theme,
+        parent: QWidget | None = None,
+        *,
+        title: str | None = None,
+        detail: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self._theme = theme
-        self.setFixedSize(METRICS.toast_width, 64)
+        self._title = self.TITLE if title is None else title
+        self._detail = self.DETAIL if detail is None else detail
         self.setObjectName("toast-preview")
-        self.setAccessibleName("Toast: mode gestur aktif")
+        self.setAccessibleName(f"Toast: {self._title.lower()}")
+        self._resize()
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema toast."""
+        self._theme = theme
+        self.update()
+
+    def set_message(self, title: str, detail: str = "") -> None:
+        """Ganti isi toast lalu sesuaikan lebar (teks panjang tidak terpotong)."""
+        self._title = caps(title)
+        self._detail = detail
+        self.setAccessibleName(f"Toast: {title.lower()}")
+        self._resize()
+        self.update()
+
+    def _resize(self) -> None:
+        metrics = QFontMetrics(mono_font(FONT.label, spacing=1.5))
+        body = QFontMetrics(sans_font(FONT.label))
+        width = max(
+            METRICS.toast_width,
+            metrics.horizontalAdvance(self._title) + 52,
+            body.horizontalAdvance(self._detail) + 52,
+        )
+        self.setFixedSize(width, 64)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         del event
@@ -620,27 +655,50 @@ class ToastPreview(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(pal.teal)
         painter.drawEllipse(QPointF(18, self.height() / 2), 3.5, 3.5)
-        painter.setFont(mono_font(FONT.label))
+        painter.setFont(mono_font(FONT.label, spacing=1.5))
         painter.setPen(pal.text)
-        painter.drawText(QPointF(32, 26), "MODE GESTUR AKTIF")
+        painter.drawText(QPointF(32, 27), self._title)
         painter.setFont(sans_font(FONT.label))
         painter.setPen(pal.muted)
-        painter.drawText(QPointF(32, 44), "Kamera menyala · video tidak disimpan")
+        painter.drawText(QPointF(32, 45), self._detail)
         painter.end()
 
 
 class HintBar(QWidget):
-    """Baris petunjuk gestur di bawah; satu baris, mono kecil."""
+    """Baris petunjuk gestur di bawah; mono kecil, kiri dan kanan."""
 
-    TEXT = "CUBIT UNTUK MEMILIH · TAHAN UNTUK MEMUTAR · CTRL+ALT+G JEDA"
+    TEXT = "TAHAN UNTUK BUKA · GESER UNTUK PINDAH · CUBIT UNTUK SERET · ESC KELUAR"
+    RIGHTS = "SEMUA AKSI ADA JALAN NON-GESTUR"
 
-    def __init__(self, theme: Theme, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        theme: Theme,
+        parent: QWidget | None = None,
+        *,
+        right: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self._theme = theme
+        self._right = self.RIGHTS if right is None else right
         self.setFixedHeight(METRICS.hint_height)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setObjectName("hint-bar")
         self.setAccessibleName("Petunjuk gestur")
+
+    @property
+    def right_text(self) -> str:
+        """Keterangan kanan (status kamera)."""
+        return self._right or ""
+
+    def set_right(self, text: str) -> None:
+        """Ganti keterangan kanan lalu gambar ulang."""
+        self._right = text
+        self.update()
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema baris petunjuk."""
+        self._theme = theme
+        self.update()
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         del event
@@ -653,10 +711,37 @@ class HintBar(QWidget):
             alpha=0.24,
             radius=self._theme.style.control_radius,
         )
-        painter.setFont(mono_font(FONT.label, spacing=2.0))
+        font = mono_font(FONT.label, spacing=2.0)
+        painter.setFont(font)
         painter.setPen(self._theme.palette.muted)
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.TEXT)
+        inset = self.rect().adjusted(18, 0, -18, 0)
+        painter.drawText(
+            inset,
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            self.TEXT,
+        )
+        # Keterangan kanan hanya digambar bila benar-benar muat, supaya teks
+        # kiri dan kanan tidak saling menimpa pada lebar sempit.
+        if self._right:
+            metrics = QFontMetrics(font)
+            needed = (
+                metrics.horizontalAdvance(self.TEXT) + metrics.horizontalAdvance(self._right) + 64
+            )
+            if self.width() >= needed:
+                painter.setPen(_alpha(self._theme.palette.accent, 0.85))
+                painter.drawText(
+                    inset,
+                    int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight),
+                    self._right,
+                )
         painter.end()
+
+    def preferred_width(self) -> int:
+        """Lebar minimum agar teks kiri dan kanan tampil utuh."""
+        metrics = QFontMetrics(mono_font(FONT.label, spacing=2.0))
+        return (
+            metrics.horizontalAdvance(self.TEXT) + metrics.horizontalAdvance(self._right or "") + 64
+        )
 
 
 class PlaceholderCard(GlassFrame):

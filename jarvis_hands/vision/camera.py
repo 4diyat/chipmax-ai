@@ -200,8 +200,11 @@ class CameraWorker(QObject):
             self.running_changed.emit(True)
             tracker = self._tracker_factory()
             self._loop(source, tracker)
-        except (CameraError, TrackerError) as exc:
+        except CameraError as exc:
             self.failed.emit(str(exc))
+        except TrackerError as exc:
+            # Pelacakan gagal bukan berarti kamera mati; beri pesan yang jelas.
+            self.failed.emit(f"pelacakan tangan berhenti: {exc}")
         except Exception as exc:  # pragma: no cover - defensive
             self.failed.emit(f"kamera berhenti: {exc}")
         finally:

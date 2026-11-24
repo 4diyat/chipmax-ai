@@ -331,6 +331,8 @@ Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
 tidak ada warna hex lepas dan tema kontras tinggi otomatis dipakai. Guard statis
 `tests/test_design_system.py` memblokir hex literal, `font-size` lepas, dan
 pemanggilan `sans_font(<angka>)`/`mono_font(<angka>)` di luar `tokens.py`.
+Warna transparan di QSS wajib lewat `tokens.rgba_css()`; Qt **tidak** memahami
+`#AARRGGBB` dan membacanya terbalik sebagai `#RRGGBB`.
 
 ## Aksesibilitas
 
@@ -342,7 +344,8 @@ pemanggilan `sans_font(<angka>)`/`mono_font(<angka>)` di luar `tokens.py`.
 - `accessibleName`/`accessibleDescription` untuk tombol, status, toast, petunjuk,
   input pengaturan, pratinjau memori, dan jawaban agen.
 - Pintasan keyboard: `Ctrl+,` membuka Pengaturan, `F1` membuka panduan kamera,
-  `Ctrl+Alt+G` menjeda gestur, `Esc` menutup dialog.
+  `Ctrl+Alt+G` menjeda gestur, `Ctrl+Alt+C` memutar status chrome overlay
+  (tampil → sembunyi → auto-hide), `Esc` menutup dialog.
 
 ```bash
 python -m jarvis_hands --a11y-audit
@@ -402,11 +405,45 @@ sekitar 350 ms; batas dan kecepatan dijepit. Panel dan kartu mengirim sinyal
 untuk penutupan, bukan menutup otomatis. Orb 112 px memiliki lima mekar dan lima
 status. TreePane menampilkan pohon malas, seleksi, dan pratinjau baca-saja.
 
+Chrome overlay mengikuti mockup: toast kanan atas (mode gestur, status kamera),
+baris petunjuk bawah dengan status kamera/FPS di kanan, dan titik idle 16 px saat
+chrome disembunyikan (target ketuk 44 px). `Ctrl+Alt+C` memutar tiga status chrome:
+tampil selalu, disembunyikan, atau auto-hide setelah idle.
+
 Jalankan `python -m jarvis_hands --catalog`, gulir ke bagian **10** untuk mencoba mouse,
 keyboard dan data contoh; kamera dan koneksi jaringan tidak digunakan katalog.
 Bagian **11** menampilkan halaman pengaturan tampilan dan gestur Fase 7.
 Contoh pemakaian akar riil dari aplikasi Qt: `TreePane(Path("folder-memori"))`.
 Integrasi kamera dan gestur pada overlay tersedia di Fase 5.
+
+## Selisih dengan mockup
+
+Mockup di `docs/mockups/` sudah ditinjau ulang terhadap implementasi nyata
+(render offscreen) dan bagian yang menyimpang sudah disamakan:
+
+- **Card**: judul 20 pt tebal di baris atas, chip di bawah judul, isi 14 pt redup
+  (sebelumnya judul 12 pt dan chip di atas judul). Judul yang terlalu panjang
+  diturunkan ukurannya lalu dipotong elipsis agar tidak menimpa tombol tutup.
+- **TreePane**: seleksi baris 56 px memakai palette teal transparan. Sebelumnya
+  `#AARRGGBB` dipakai di QSS; Qt membacanya sebagai `#RRGGBB` sehingga muncul blok
+  biru pekat di area indentasi. Baris keamanan kini bernuansa amber seperti mockup.
+- **Pengaturan**: sidebar berikon (gear, monitor, kamera, tangan) + garis judul,
+  lambang mekar di kanan atas, tombol tutup bulat, tombol primer teal. Label
+  "AGEN & API" tidak lagi tampil "AGEN_API" (Qt menganggap `&` sebagai mnemonic).
+- **Agen & API**: label mono di atas kolom input, baris "ALAMAT OLLAMA" hanya
+  muncul untuk Ollama, ikon mata di dalam kolom key, notice berpagar gembok
+  dengan badge status uji di kanan, tombol hapus key jadi ikon tempat sampah.
+- **Overlay**: toast kanan atas, baris petunjuk bawah (kiri petunjuk, kanan status
+  kamera), orb di samping cincin seperti mockup, dan titik idle 16 px.
+
+Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
+
+- Nama penyedia memakai label teks (Gemini/Ollama/Claude/ChatGPT), bukan empat
+  logo merek berwarna; logo pihak ketiga tidak dibundel.
+- Mockup menggambar cincin lebih tebal (±40 px) daripada metrik produk 20 px;
+  mockup adalah pratinjau, angkanya tetap mengikuti `tokens.METRICS`.
+- Tombol keyboard tetap ada di jendela kontrol terpisah (jalan non-gestur) walau
+  tidak digambar di mockup.
 
 ## Status fase
 

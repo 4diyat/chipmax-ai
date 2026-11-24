@@ -26,3 +26,6 @@ Thumbs.db
 
 # Artefak uji lokal
 *.log
+
+# Render pemeriksaan visual (tools/visual_check.py)
+.artifacts/

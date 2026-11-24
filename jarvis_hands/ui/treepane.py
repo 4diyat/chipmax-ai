@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -26,6 +26,7 @@ from jarvis_hands.ui.tokens import (
     Theme,
     build_theme,
     mono_font,
+    rgba_css,
     sans_font,
     with_alpha,
 )
@@ -102,24 +103,36 @@ class TreePane(Panel):
         return self._memory
 
     def _list_stylesheet(self) -> None:
-        """Terapkan palet theme ke pohon, pratinjau, dan label sisi kanan."""
+        """Terapkan palet theme ke pohon, pratinjau, dan label sisi kanan.
+
+        Blok seleksi dilukis dari palette (bukan ``QSS::item:selected``): Qt
+        mengisi seluruh baris termasuk area indentasi, sesuai baris 46-56 px di
+        mockup. Nuansa amber dipakai untuk baris keamanan, seperti mockup.
+        """
         pal = self._tree_theme.palette
         self._list.setStyleSheet(
             f"QTreeWidget {{ background: transparent; color: {pal.text.name()}; border: none; }}"
             f"QTreeWidget::item {{ min-height: {METRICS.min_target}px; padding-left: 6px; }}"
-            f"QTreeWidget::item:selected {{ background: "
-            f"{with_alpha(pal.teal, 0.35).name(QColor.NameFormat.HexArgb)}; "
-            f"border-left: 3px solid {pal.teal.name()}; }}"
+            f"QTreeWidget::item:hover {{ background: {rgba_css(pal.teal, 0.10)}; }}"
         )
+        selection = self._list.palette()
+        selection.setColor(QPalette.ColorRole.Highlight, with_alpha(pal.teal, 0.22))
+        selection.setColor(QPalette.ColorRole.HighlightedText, pal.text)
+        self._list.setPalette(selection)
         self._path.setStyleSheet(f"color: {pal.teal.name()};")
         self._info.setStyleSheet(f"color: {pal.text.name()};")
         self._preview.setStyleSheet(
-            f"background: {with_alpha(pal.stage, 0.55).name(QColor.NameFormat.HexArgb)}; "
+            f"background: {rgba_css(pal.stage, 0.55)}; "
             f"color: {pal.muted.name()}; "
-            f"border: 1px solid {with_alpha(pal.border, 0.35).name(QColor.NameFormat.HexArgb)}; "
+            f"border: 1px solid {rgba_css(pal.border, 0.35)}; "
             f"border-radius: {self._tree_theme.style.control_radius:.0f}px; padding: 8px;"
         )
-        self._safety.setStyleSheet(f"color: {pal.muted.name()};")
+        self._safety.setStyleSheet(
+            f"color: {pal.warning.name()}; "
+            f"background: {rgba_css(pal.warning, 0.10)}; "
+            f"border: 1px solid {rgba_css(pal.warning, 0.45)}; "
+            f"border-radius: {self._tree_theme.style.control_radius:.0f}px; padding: 10px;"
+        )
 
     def set_theme(self, theme: Theme) -> None:
         """Ganti tema (misal kontras tinggi) tanpa membangun ulang pohon."""

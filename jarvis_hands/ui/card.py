@@ -33,6 +33,7 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
+    QFont,
     QFontMetrics,
     QHideEvent,
     QKeyEvent,
@@ -87,6 +88,22 @@ VELOCITY_WINDOW_S: Final = 0.12
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def _fitted_title(text: str, width: float) -> tuple[QFont, str]:
+    """Judul kartu yang pasti muat: ukuran diturunkan, lalu dipotong dengan elipsis.
+
+    Font Space Grotesk tidak dibundel; pada DejaVu Sans judul 20 pt melebihi
+    lebar 340 px. Ukuran hanya diturunkan sampai ``FONT.small``; judul yang
+    masih terlalu panjang dipotong dengan elipsis agar tidak menimpa tombol tutup.
+    """
+    for size in range(FONT.title, FONT.small - 1, -1):
+        font = sans_font(size, bold=True)
+        if QFontMetrics(font).horizontalAdvance(text) <= width:
+            return font, text
+    font = sans_font(FONT.small, bold=True)
+    metrics = QFontMetrics(font)
+    return font, metrics.elidedText(text, Qt.TextElideMode.ElideRight, int(width))
 
 
 class Card(QWidget):
@@ -503,30 +520,38 @@ class Card(QWidget):
         painter.drawPolyline(QPolygonF(points))
 
     def _paint_chip(self, painter: QPainter, surface: QRectF) -> None:
+        """Chip mono kapital di bawah judul (mockup: isi 18% teal, teks terang)."""
         pal = self._theme.palette
         font = mono_font(FONT.label, spacing=1.5)
         painter.setFont(font)
         label = caps(self._chip)
-        width = painter.fontMetrics().horizontalAdvance(label) + 18
-        rect = QRectF(surface.left() + METRICS.card_padding, surface.top() + 20, width, 18)
-        painter.setPen(Qt.PenStyle.NoPen)
+        width = painter.fontMetrics().horizontalAdvance(label) + 22
+        rect = QRectF(surface.left() + METRICS.card_padding, surface.top() + 82, width, 20)
+        painter.setPen(QPen(with_alpha(pal.teal, 0.45), 1.0))
         painter.setBrush(with_alpha(pal.teal, 0.18))
-        painter.drawRoundedRect(rect, 9, 9)
-        painter.setPen(with_alpha(pal.teal, 0.95))
+        painter.drawRoundedRect(rect, 10, 10)
+        painter.setPen(QPen(with_alpha(pal.teal, 0.95), 1.0))
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
     def _paint_text(self, painter: QPainter, surface: QRectF) -> None:
+        """Judul 20 px tebal, lalu isi 14 px redup (skala huruf mockup)."""
         pal = self._theme.palette
         left = surface.left() + METRICS.card_padding
         width = surface.width() - 2 * METRICS.card_padding - CLOSE_TARGET
-        title = QRectF(left, surface.top() + 48, width, 26)
-        painter.setFont(sans_font(FONT.small, bold=True))
+        title = QRectF(left, surface.top() + 36, width, 30)
+        title_font, title_text = _fitted_title(self._title, width)
+        painter.setFont(title_font)
         painter.setPen(pal.text)
         painter.drawText(
-            title, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self._title
+            title, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title_text
         )
-        body = QRectF(left, surface.top() + 80, surface.width() - 2 * METRICS.card_padding, 92)
-        painter.setFont(sans_font(FONT.label))
+        body = QRectF(
+            left,
+            surface.top() + 112,
+            surface.width() - 2 * METRICS.card_padding,
+            surface.bottom() - METRICS.card_padding - (surface.top() + 112),
+        )
+        painter.setFont(sans_font(FONT.small))
         painter.setPen(pal.muted)
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.AlignmentFlag.AlignTop)
         flags |= int(Qt.TextFlag.TextWordWrap)
