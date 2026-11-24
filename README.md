@@ -433,8 +433,7 @@ Mockup di `docs/mockups/` sudah ditinjau ulang terhadap implementasi nyata
 - **Agen & API**: label mono di atas kolom input, baris "ALAMAT OLLAMA" hanya
   muncul untuk Ollama, ikon mata di dalam kolom key, notice berpagar gembok
   dengan badge status uji di kanan, tombol hapus key jadi ikon tempat sampah.
-- **Overlay**: toast kanan atas, baris petunjuk bawah (kiri petunjuk, kanan status
-  kamera), orb di samping cincin seperti mockup, dan titik idle 16 px.
+- **Overlay**: toast kanan atas, pill kamera di kanan atas (`• KAMERA AKTIF   30 FPS` dengan bullet seperti mockup), baris petunjuk bawah (kiri petunjuk, kanan petunjuk non-gestur), orb di samping cincin seperti mockup, dan titik idle 16 px.
 
 Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 

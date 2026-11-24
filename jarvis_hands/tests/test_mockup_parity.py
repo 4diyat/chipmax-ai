@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor
 
 from jarvis_hands.agent.settings import AgentSettings, CredentialStore
 from jarvis_hands.core.config import AppConfig
+from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.card import Card
 from jarvis_hands.ui.catalog import HintBar, ToastPreview
 from jarvis_hands.ui.chrome import ChromeMode, ChromeToggle
@@ -127,3 +128,35 @@ def test_every_icon_renders_pixels(kind: IconKind) -> None:
         if image.pixelColor(x, y).alpha() > 0
     ]
     assert opaque, kind
+
+
+def test_camera_indicator_label_has_bullet_like_mockup(qtbot: Any) -> None:
+    """Pill kamera harus dimulai dengan bullet seperti mockup."""
+    ind = CameraIndicator(build_theme())
+    qtbot.addWidget(ind)
+    ind.set_state(CameraState.ACTIVE)
+    ind.set_fps(30.0)
+    assert ind.label == "• KAMERA AKTIF   30 FPS"
+
+    ind.set_fps(0.0)
+    assert ind.label == "• KAMERA AKTIF"
+
+    ind.set_state(CameraState.OFF)
+    assert ind.label == "• KAMERA MATI"
+
+    ind.set_state(CameraState.PAUSED)
+    assert ind.label == "• KAMERA JEDA"
+
+    ind.set_state(CameraState.ERROR)
+    assert ind.label == "• KAMERA ERROR"
+
+
+def test_hint_bar_right_is_non_gestur_when_camera_active(qtbot: Any) -> None:
+    """Saat kamera aktif, hint kanan bukan duplikasi status kamera (sudah ada di pill)."""
+    bar = HintBar(build_theme())
+    qtbot.addWidget(bar)
+    bar.set_right("SEMUA AKSI ADA JALAN NON-GESTUR")
+    assert bar.right_text == "SEMUA AKSI ADA JALAN NON-GESTUR"
+
+    bar.set_right("KAMERA JEDA · CTRL+ALT+G")
+    assert bar.right_text == "KAMERA JEDA · CTRL+ALT+G"

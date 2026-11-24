@@ -255,10 +255,14 @@ class OverlayWindow(QWidget):
         self.autohide.poke()
 
     def _update_hint(self, fps: float = 0.0) -> None:
-        """Baris petunjuk kanan mengikuti status kamera (bukan angka tetap)."""
-        if self.session.is_active and not self.session.is_paused:
-            right = f"KAMERA AKTIF · {round(fps)} FPS · LOKAL"
-        elif self.session.is_paused:
+        """Baris petunjuk kanan mengikuti status kamera (bukan angka tetap).
+
+        Saat kamera aktif, status kamera sudah ditampilkan pill indikator di
+        kanan atas, jadi hint kanan tetap pada petunjuk non-gestur seperti
+        mockup (tidak ada duplikasi "KAMERA AKTIF · FPS").
+        """
+        del fps
+        if self.session.is_paused:
             right = "KAMERA JEDA · CTRL+ALT+G"
         else:
             right = "SEMUA AKSI ADA JALAN NON-GESTUR"
