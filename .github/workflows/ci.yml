@@ -94,9 +94,20 @@ jobs:
         timeout-minutes: 3
         run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_agent_settings.py
 
-      - name: Tes agen Gemini
+      - name: Tes Gemini tanpa UI
         timeout-minutes: 3
-        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py
+        run: >-
+          uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
+          jarvis_hands/tests/test_gemini.py
+          -k "not bridge_thread_updates_ui and not single_flight_and_graceful_close"
+
+      - name: Tes Gemini pembaruan UI
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py::test_bridge_thread_updates_ui
+
+      - name: Tes Gemini keluar saat sibuk
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py::test_single_flight_and_graceful_close
 
       - name: Tes peluncur
         timeout-minutes: 3
