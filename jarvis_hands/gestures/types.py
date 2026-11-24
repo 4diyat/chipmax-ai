@@ -15,7 +15,7 @@ __all__ = ["GestureEvent", "GestureKind", "GesturePhase"]
 
 @unique
 class GestureKind(StrEnum):
-    """Enam gestur yang didukung."""
+    """Delapan gestur yang didukung."""
 
     TAP = "tap"
     DRAG = "drag"
@@ -23,6 +23,8 @@ class GestureKind(StrEnum):
     TWO_HAND = "two_hand"
     CLAP = "clap"
     SCRUB_EXPLODE = "scrub_explode"
+    SWIPE = "swipe"
+    FIST = "fist"
 
 
 @unique
@@ -40,7 +42,9 @@ class GestureEvent:
     """Satu event gestur dengan posisi layar dan metrik.
 
     ``magnitude`` bersatuan milidetik untuk HOLD, piksel untuk gestur lain.
-    ``action`` membedakan ``scrub`` dan ``explode`` pada ``SCRUB_EXPLODE``.
+    ``action`` membedakan ``scrub`` dan ``explode`` pada ``SCRUB_EXPLODE``,
+    atau arah ``"kiri"``/``"kanan"``/``"atas"``/``"bawah"`` pada ``SWIPE``.
+    ``direction`` adalah arah gerakan untuk ``SWIPE`` (kosong untuk yang lain).
     """
 
     kind: GestureKind
@@ -54,6 +58,7 @@ class GestureEvent:
     action: str = ""
     cancelled: bool = False
     hands: int = 1
+    direction: str = ""
 
     @property
     def position(self) -> tuple[int, int]:

@@ -153,6 +153,9 @@ class GestureThresholds:
     clap_min_speed_px_s: float = 600.0
     explode_min_speed_px_s: float = 800.0
     gesture_cooldown_ms: int = 400
+    swipe_min_px: float = 100.0
+    swipe_max_ms: int = 500
+    fist_hold_ms: int = 400
 
 
 @dataclass(frozen=True)
@@ -226,6 +229,9 @@ class AppConfig:
                 "clap_min_speed_px_s": self.gestures.clap_min_speed_px_s,
                 "explode_min_speed_px_s": self.gestures.explode_min_speed_px_s,
                 "gesture_cooldown_ms": self.gestures.gesture_cooldown_ms,
+                "swipe_min_px": self.gestures.swipe_min_px,
+                "swipe_max_ms": self.gestures.swipe_max_ms,
+                "fist_hold_ms": self.gestures.fist_hold_ms,
             },
             "cursor": {
                 "one_euro_min_cutoff": self.cursor.one_euro_min_cutoff,
@@ -341,6 +347,19 @@ class AppConfig:
                     400,
                     "gestures.gesture_cooldown_ms",
                     minimum=0,
+                ),
+                swipe_min_px=_float(
+                    gestures,
+                    "swipe_min_px",
+                    100.0,
+                    "gestures.swipe_min_px",
+                    minimum=0.0,
+                ),
+                swipe_max_ms=_int(
+                    gestures, "swipe_max_ms", 500, "gestures.swipe_max_ms", minimum=1
+                ),
+                fist_hold_ms=_int(
+                    gestures, "fist_hold_ms", 400, "gestures.fist_hold_ms", minimum=1
                 ),
             ),
             cursor=CursorConfig(

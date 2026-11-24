@@ -69,6 +69,14 @@ class GestureEngine:
         self._last_explode_ts = -(10**9)
         self._last_clap_ts = -(10**9)
 
+        # SWIPE: gerakan tangan terbuka (tidak mencubit) dalam arah satu.
+        self._swipe_start: tuple[int, int, int] | None = None
+        self._swipe_max_dist = 0.0
+        self._swipe_end: tuple[int, int] = (0, 0)
+
+        # FIST: semua jari lipat ke telapak, tahan sesuai ambang.
+        self._fist_start: int | None = None
+
     # ------------------------------------------------------------------ state
 
     @property
@@ -90,6 +98,16 @@ class GestureEngine:
     def two_hand_active(self) -> bool:
         """True bila dua tangan sedang berdekatan."""
         return self._two_hand_active
+
+    @property
+    def is_swiping(self) -> bool:
+        """True bila gerakan swipe sedang ditrack."""
+        return self._swipe_start is not None
+
+    @property
+    def is_fist(self) -> bool:
+        """True bila gestur genggam (fist) sedang aktif."""
+        return self._fist_start is not None
 
     @property
     def screen_size(self) -> tuple[int, int]:
@@ -124,6 +142,10 @@ class GestureEngine:
         self._last_scrub_ts = -(10**9)
         self._last_explode_ts = -(10**9)
         self._last_clap_ts = -(10**9)
+        self._swipe_start = None
+        self._swipe_max_dist = 0.0
+        self._swipe_end = (0, 0)
+        self._fist_start = None
 
     def set_thresholds(self, thresholds: GestureThresholds) -> None:
         """Ganti ambang gestur saat aplikasi berjalan (tanpa membatalkan gestur)."""
@@ -144,6 +166,8 @@ class GestureEngine:
         events.extend(self._update_pinch(sample))
         events.extend(self._update_two_hand(result))
         events.extend(self._update_scrub(sample, result))
+        events.extend(self._update_swipe(sample))
+        events.extend(self._update_fist(result))
         return events
 
     # ------------------------------------------------------------ pinch state
@@ -462,6 +486,128 @@ class GestureEngine:
                 )
             ]
         return []
+
+    # ------------------------------------------------------------ swipe state
+
+    def _update_swipe(self, sample: CursorSample) -> list[GestureEvent]:
+        """Deteksi gerakan layang (swipe) tangan terbuka dalam satu arah.
+
+        Di-track saat tangan terlihat dan tidak mencubit. Jika perpindahan
+        total dari titik awal mencapai ``swipe_min_px`` dalam
+        ``swipe_max_ms`` sebelum tangan mencubit atau hilang, event SWIPE
+        one_shot di-emits dengan arah dominan.
+        """
+        ts = sample.timestamp_ms
+        events: list[GestureEvent] = []
+
+        if sample.visible and not sample.pinching:
+            if self._swipe_start is None:
+                self._swipe_start = (sample.x, sample.y, ts)
+                self._swipe_max_dist = 0.0
+                self._swipe_end = (sample.x, sample.y)
+            else:
+                start_x, start_y, _ = self._swipe_start
+                dist = math.hypot(sample.x - start_x, sample.y - start_y)
+                self._swipe_max_dist = max(self._swipe_max_dist, dist)
+                self._swipe_end = (sample.x, sample.y)
+            return events
+
+        # Tangan mulai mencubit atau hilang: akhiri tracking swipe.
+        if self._swipe_start is None:
+            return events
+        start_x, start_y, start_ts = self._swipe_start
+        end_x, end_y = self._swipe_end
+        max_dist = self._swipe_max_dist
+        self._swipe_start = None
+        self._swipe_max_dist = 0.0
+        self._swipe_end = (0, 0)
+
+        elapsed = max(0, ts - start_ts)
+        if elapsed <= self._thresholds.swipe_max_ms and max_dist >= self._thresholds.swipe_min_px:
+            dx = end_x - start_x
+            dy = end_y - start_y
+            events.append(
+                GestureEvent(
+                    kind=GestureKind.SWIPE,
+                    phase=GesturePhase.ONE_SHOT,
+                    timestamp_ms=ts,
+                    x=start_x,
+                    y=start_y,
+                    dx=dx,
+                    dy=dy,
+                    magnitude=max_dist,
+                    direction=self._swipe_direction(dx, dy),
+                )
+            )
+        return events
+
+    @staticmethod
+    def _swipe_direction(dx: float, dy: float) -> str:
+        """Tentukan arah dominan dari displacement (dx, dy)."""
+        if abs(dx) >= abs(dy):
+            return "kanan" if dx > 0 else "kiri"
+        return "bawah" if dy > 0 else "atas"
+
+    # ------------------------------------------------------------ fist state
+
+    def _update_fist(self, result: TrackingResult) -> list[GestureEvent]:
+        """Deteksi genggam (fist): semua ujung jari dekat telapak/pulsa.
+
+        Jika tangan dalam posisi genggam terus-menerus >= ``fist_hold_ms``,
+        event FIST one_shot di-emits.
+        """
+        ts = result.timestamp_ms
+        events: list[GestureEvent] = []
+
+        hands = result.hands
+        if not hands:
+            self._fist_start = None
+            return events
+
+        hand = hands[0]
+        if self._is_fist(hand, result.width, result.height):
+            if self._fist_start is None:
+                self._fist_start = ts
+            elif ts - self._fist_start >= self._thresholds.fist_hold_ms:
+                events.append(
+                    GestureEvent(
+                        kind=GestureKind.FIST,
+                        phase=GesturePhase.ONE_SHOT,
+                        timestamp_ms=ts,
+                        x=int(hand.index_tip.x),
+                        y=int(hand.index_tip.y),
+                        magnitude=float(ts - self._fist_start),
+                        hands=1,
+                    )
+                )
+                self._fist_start = None
+        else:
+            self._fist_start = None
+
+        return events
+
+    def _is_fist(self, hand: HandObservation, width: int, height: int) -> bool:
+        """True bila semua ujung jari dekat telapak (posisi genggam)."""
+        landmarks = hand.landmarks
+        if len(landmarks) < 21:
+            return False
+
+        wrist = landmarks[0]
+        # Ukuran telapak dari pergelangan ke jempol tengah (landmark 9).
+        aspect = (width / height) if height else 1.0
+        palm_size = math.hypot((landmarks[9].x - wrist.x) * aspect, landmarks[9].y - wrist.y)
+        if palm_size <= 1e-6:
+            return False
+
+        # Ujung jari: telunjuk(8), tengah(12), manis(16), kelingking(20).
+        # Semua harus dekat pergelangan (dalam fraksi ukuran telapak).
+        tip_indices = (8, 12, 16, 20)
+        for tip_idx in tip_indices:
+            tip = landmarks[tip_idx]
+            dist = math.hypot((tip.x - wrist.x) * aspect, tip.y - wrist.y)
+            if dist > palm_size * 0.55:
+                return False
+        return True
 
     # --------------------------------------------------------------- helpers
 

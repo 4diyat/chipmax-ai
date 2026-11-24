@@ -23,16 +23,28 @@ def make_hand(
     score: float = 0.92,
     width: int = 640,
     height: int = 360,
+    fist: bool = False,
 ) -> HandObservation:
-    """Bangun 21 landmark sintetis dengan rasio cubit dan ukuran telapak terkontrol."""
+    """Bangun 21 landmark sintetis dengan rasio cubit dan ukuran telapak terkontrol.
+
+    Saat ``fist=True``, semua ujung jari diposisikan di dekat pergelangan
+    (posisi genggam) untuk pengujian deteksi FIST.
+    """
     aspect = width / height if height else 1.0
     points = [Landmark(wrist[0], wrist[1]) for _ in range(21)]
     points[0] = Landmark(wrist[0], wrist[1])
     points[9] = Landmark(wrist[0], wrist[1] - hand_size)
-    points[8] = Landmark(index[0], index[1])
-    distance = pinch_ratio * hand_size
-    dx = distance / aspect
-    points[4] = Landmark(index[0] + dx, index[1])
+
+    if fist:
+        # Semua ujung jari dekat pergelangan (posisi genggam).
+        for tip_idx in (4, 8, 12, 16, 20):
+            points[tip_idx] = Landmark(wrist[0], wrist[1])
+    else:
+        points[8] = Landmark(index[0], index[1])
+        distance = pinch_ratio * hand_size
+        dx = distance / aspect
+        points[4] = Landmark(index[0] + dx, index[1])
+
     for i in (5, 13, 17):
         points[i] = Landmark(wrist[0], wrist[1] - hand_size * 0.8)
     return HandObservation(

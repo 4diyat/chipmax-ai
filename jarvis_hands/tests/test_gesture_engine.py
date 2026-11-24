@@ -277,3 +277,108 @@ def test_reset_clears_active_gesture() -> None:
     assert not engine.is_dragging
     assert not engine.is_holding
     assert not engine.two_hand_active
+    assert not engine.is_swiping
+    assert not engine.is_fist
+
+
+def test_swipe_right_emits_one_shot() -> None:
+    """Gerakan tangan terbuka ke kanan menghasilkan SWIPE arah kanan."""
+    frames = [_open(i * 33) for i in range(2)]
+    # Gerakkan tangan terbuka ke kanan cukup jauh dalam waktu singkat.
+    frames.append(
+        make_result(
+            make_hand(index=(0.7, 0.5), pinch_ratio=0.9),
+            timestamp_ms=66,
+        )
+    )
+    # Tutup tangan untuk menutup tracking swipe.
+    frames.append(_closed(99, (0.7, 0.5)))
+    events = _run(frames)
+    swipes = [e for e in events if e.kind is GestureKind.SWIPE]
+    assert len(swipes) == 1
+    swipe = swipes[0]
+    assert swipe.phase is GesturePhase.ONE_SHOT
+    assert swipe.direction == "kanan"
+    assert swipe.magnitude >= 100.0
+    assert swipe.dx > 0
+
+
+def test_swipe_left_emits_one_shot() -> None:
+    frames = [_open(i * 33) for i in range(2)]
+    frames.append(
+        make_result(
+            make_hand(index=(0.3, 0.5), pinch_ratio=0.9),
+            timestamp_ms=66,
+        )
+    )
+    frames.append(_closed(99, (0.3, 0.5)))
+    events = _run(frames)
+    swipes = [e for e in events if e.kind is GestureKind.SWIPE]
+    assert len(swipes) == 1
+    assert swipes[0].direction == "kiri"
+    assert swipes[0].dx < 0
+
+
+def test_swipe_too_slow_is_ignored() -> None:
+    """Gerakan yang lebih lambat dari swipe_max_ms tidak diemit sebagai SWIPE."""
+    frames = [_open(i * 33) for i in range(2)]
+    frames.append(
+        make_result(
+            make_hand(index=(0.7, 0.5), pinch_ratio=0.9),
+            timestamp_ms=600,  # terlambat > swipe_max_ms (500)
+        )
+    )
+    frames.append(_closed(633, (0.7, 0.5)))
+    events = _run(frames)
+    assert [e for e in events if e.kind is GestureKind.SWIPE] == []
+
+
+def test_swipe_too_short_is_ignored() -> None:
+    """Gerakan yang lebih pendek dari swipe_min_px tidak diemit sebagai SWIPE."""
+    frames = [_open(i * 33) for i in range(2)]
+    frames.append(
+        make_result(
+            make_hand(index=(0.52, 0.5), pinch_ratio=0.9),
+            timestamp_ms=66,  # pergeseran kecil, < swipe_min_px
+        )
+    )
+    frames.append(_closed(99, (0.52, 0.5)))
+    events = _run(frames)
+    assert [e for e in events if e.kind is GestureKind.SWIPE] == []
+
+
+def test_fist_hold_emits_one_shot() -> None:
+    """Tegang genggam yang cukup lama menghasilkan FIST one_shot."""
+    frames = [
+        make_result(make_hand(fist=True), timestamp_ms=i * 33)
+        for i in range(14)  # 14 * 33 = 462 ms > fist_hold_ms (400)
+    ]
+    events = _run(frames)
+    fists = [e for e in events if e.kind is GestureKind.FIST]
+    assert len(fists) == 1
+    assert fists[0].phase is GesturePhase.ONE_SHOT
+    assert fists[0].magnitude >= 400.0
+
+
+def test_fist_too_short_is_ignored() -> None:
+    """Tegang genggam yang terlalu singkat tidak diemit sebagai FIST."""
+    frames = [
+        make_result(make_hand(fist=True), timestamp_ms=i * 33)
+        for i in range(5)  # 5 * 33 = 165 ms < fist_hold_ms (400)
+    ]
+    events = _run(frames)
+    assert [e for e in events if e.kind is GestureKind.FIST] == []
+
+
+def test_open_hand_is_not_fist() -> None:
+    """Tangan terbuka (tidak genggam) tidak memicu FIST."""
+    frames = [_open(i * 33) for i in range(15)]
+    events = _run(frames)
+    assert [e for e in events if e.kind is GestureKind.FIST] == []
+
+
+def test_pinch_is_not_fist() -> None:
+    """Tangan mencubit (jempol-telunjuk rapat) tidak dianggap genggam."""
+    frames = [_closed(i * 33) for i in range(15)]
+    events = _run(frames)
+    assert [e for e in events if e.kind is GestureKind.FIST] == []

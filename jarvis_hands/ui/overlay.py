@@ -557,6 +557,42 @@ class OverlayWindow(QWidget):
             and not self.tree.isVisible()
         ):
             self.toggle_tree()
+        elif event.kind is GestureKind.SWIPE and event.phase is GesturePhase.ONE_SHOT:
+            self._route_swipe(event)
+        elif event.kind is GestureKind.FIST and event.phase is GesturePhase.ONE_SHOT:
+            self._route_fist()
+
+    def _route_swipe(self, event: GestureEvent) -> None:
+        """Terjemahkan gestur SWIPE menjadi aksi tampilan sesuai arah."""
+        self.autohide.poke()
+        direction = event.direction
+        if direction in ("kanan", "kiri"):
+            # Ganti mode tampilan: kanan = berikutnya, kiri = sebelumnya.
+            modes = list(DisplayMode)
+            current = modes.index(self.mode)
+            step = 1 if direction == "kanan" else -1
+            new_mode = modes[(current + step) % len(modes)]
+            self.set_mode(new_mode)
+            self.show_toast(
+                f"Mode: {new_mode.value.title()}",
+                detail="Geser tangan terbuka untuk pindah mode",
+            )
+        elif direction == "atas":
+            self.chrome.set_mode(ChromeMode.ON)
+            self.show_toast("Chrome tampil", detail="Geser tangan ke atas")
+        elif direction == "bawah":
+            self.chrome.set_mode(ChromeMode.OFF)
+            self.show_toast("Chrome disembunyikan", detail="Geser tangan ke bawah")
+
+    def _route_fist(self) -> None:
+        """Genggaman tangan = jeda/lanjut Mode Gestur (ganti Ctrl+Alt+G)."""
+        self.autohide.poke()
+        self.session.toggle()
+        status = "dijeda" if self.session.is_paused else "dilanjutkan"
+        self.show_toast(
+            f"Mode gestur {status}",
+            detail="Tegang genggam lagi untuk kembali",
+        )
 
     def _tree_tap(self, point: QPoint) -> None:
         tree = self.tree.findChild(QTreeWidget, "memory-tree")
