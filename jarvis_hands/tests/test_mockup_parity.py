@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor
 
 from jarvis_hands.agent.settings import AgentSettings, CredentialStore
 from jarvis_hands.core.config import AppConfig
+from jarvis_hands.ui.agent_settings import AgentSettingsDialog
 from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.card import Card
 from jarvis_hands.ui.catalog import HintBar, ToastPreview
@@ -160,3 +161,37 @@ def test_hint_bar_right_is_non_gestur_when_camera_active(qtbot: Any) -> None:
 
     bar.set_right("KAMERA JEDA · CTRL+ALT+G")
     assert bar.right_text == "KAMERA JEDA · CTRL+ALT+G"
+
+
+def test_provider_dropdown_uses_full_display_names(qtbot: Any) -> None:
+    """Dropdown penyedia harus menampilkan nama lengkap seperti mockup 01."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+    items = [dialog.provider_dropdown.itemText(i) for i in range(dialog.provider_dropdown.count())]
+    assert items == ["Google Gemini", "Ollama", "Claude", "ChatGPT"]
+    # Default terpilih Gemini
+    assert dialog.provider_dropdown.currentText() == "Google Gemini"
+    assert dialog.note.text() == "Penyedia aktif · Gemini API"
+    dialog.close()
+
+
+def test_provider_dropdown_switches_note_and_placeholder(qtbot: Any) -> None:
+    """Pindah penyedia di dropdown memperbarui note + placeholder kunci."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+
+    dialog.provider_dropdown.setCurrentText("Ollama")
+    assert dialog.provider_dropdown.currentText() == "Ollama"
+    assert dialog.note.text() == "Ollama: alamat server · API key opsional"
+    assert dialog.url.isEnabled()
+
+    dialog.provider_dropdown.setCurrentText("Claude")
+    assert dialog.note.text() == "Penyedia aktif · Claude API"
+    assert not dialog.url.isEnabled()
+    assert dialog.key.placeholderText() == "Masukkan key Claude API"
+
+    dialog.provider_dropdown.setCurrentText("ChatGPT")
+    assert dialog.note.text() == "Penyedia aktif · ChatGPT API"
+    assert dialog.key.placeholderText() == "Masukkan key ChatGPT API"
+
+    dialog.close()
