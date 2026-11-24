@@ -134,7 +134,9 @@ def test_redirects_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    "raw", [b"not json", b"{}", b'{"candidates": []}', b"x" * (gemini.MAX_RESPONSE_BYTES + 1)]
+    "raw",
+    [b"not json", b"{}", b'{"candidates": []}', b"x" * (gemini.MAX_RESPONSE_BYTES + 1)],
+    ids=["invalid-json", "empty-object", "no-candidates", "oversized"],
 )
 def test_invalid_response_rejected(monkeypatch: Any, raw: bytes) -> None:
     monkeypatch.setattr(gemini, "build_opener", lambda *handlers: Transport(raw))
