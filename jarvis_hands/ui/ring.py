@@ -71,10 +71,15 @@ class RingWidget(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAutoFillBackground(False)
         self.setAccessibleName("Cincin JARVIS")
-        self._word_font = sans_font(22, bold=True)
+        self._word_font = sans_font(FONT.title, bold=True)
         self._word_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 7.0)
         self._status_font = mono_font(FONT.label, spacing=3.0)
         self._update_accessible()
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang cincin."""
+        self._theme = theme
+        self.update()
 
     # ------------------------------------------------------------------ state
 

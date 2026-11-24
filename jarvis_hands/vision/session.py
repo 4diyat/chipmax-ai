@@ -88,6 +88,16 @@ class CameraSession(QObject):
         return CameraState.OFF
 
     @property
+    def config(self) -> CameraConfig:
+        """Konfigurasi kamera yang dipakai pada penyalaan berikutnya."""
+        return self._config
+
+    def set_config(self, config: CameraConfig) -> None:
+        """Perbarui konfigurasi kamera; diterapkan saat kamera dinyalakan lagi."""
+        self._config = config
+        self._controller.set_config(config)
+
+    @property
     def hotkey_listening(self) -> bool:
         """True bila backend hotkey global aktif."""
         return self._hotkey.is_listening

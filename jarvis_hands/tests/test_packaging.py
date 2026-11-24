@@ -39,3 +39,15 @@ def test_bundled_model_assets_exist() -> None:
     assert (models / "hand_landmarker.task").is_file()
     assert (models / "LICENSE").is_file()
     assert (models / "README.md").is_file()
+
+
+def test_bundled_icon_assets_exist_and_are_in_spec() -> None:
+    icons = ROOT / "jarvis_hands" / "assets" / "icons"
+    assert (icons / "chevron-down.svg").is_file()
+    assert (icons / "chevron-up.svg").is_file()
+    assert (icons / "check.svg").is_file()
+    spec = (ROOT / "packaging" / "jarvis-hands.spec").read_text(encoding="utf-8")
+    assert "chevron-down.svg" in spec
+    assert "chevron-up.svg" in spec
+    assert "check.svg" in spec
+    assert "jarvis_hands/assets/icons" in spec

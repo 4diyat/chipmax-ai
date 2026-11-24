@@ -230,6 +230,11 @@ class Card(QWidget):
             self._motion.set_position(x, y)
             self.move(self.home)
 
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema (misal kontras tinggi) tanpa membangun ulang kartu."""
+        self._theme = theme
+        self.update()
+
     def dismiss_speed(self) -> float:
         """Ambang kecepatan lepasan yang menghilangkan kartu."""
         return self._dismiss_speed
@@ -515,13 +520,13 @@ class Card(QWidget):
         left = surface.left() + METRICS.card_padding
         width = surface.width() - 2 * METRICS.card_padding - CLOSE_TARGET
         title = QRectF(left, surface.top() + 48, width, 26)
-        painter.setFont(sans_font(15, bold=True))
+        painter.setFont(sans_font(FONT.small, bold=True))
         painter.setPen(pal.text)
         painter.drawText(
             title, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self._title
         )
         body = QRectF(left, surface.top() + 80, surface.width() - 2 * METRICS.card_padding, 92)
-        painter.setFont(sans_font(11))
+        painter.setFont(sans_font(FONT.label))
         painter.setPen(pal.muted)
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.AlignmentFlag.AlignTop)
         flags |= int(Qt.TextFlag.TextWordWrap)
@@ -579,7 +584,7 @@ class Panel(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(10)
         self._title_label = QLabel(caps(title), self._header)
-        self._title_label.setFont(sans_font(15, bold=True))
+        self._title_label.setFont(sans_font(FONT.small, bold=True))
         self._title_label.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         header_layout.addWidget(self._title_label)
         self._chip_host = QWidget(self._header)
@@ -643,6 +648,14 @@ class Panel(QWidget):
         """Batasi gerak panel ke ``area`` induk."""
         self._area = QRectF(area) if area is not None else None
         self._clamp_into_area()
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema dan segarkan label/chip panel."""
+        self._theme = theme
+        self._title_label.setStyleSheet(f"color: {theme.palette.text.name()};")
+        for chip in self._chip_host.findChildren(_Chip):
+            chip.set_theme(theme)
+        self.update()
 
     def _set_chips(self, chips: Sequence[str]) -> None:
         while self._chip_layout.count():
@@ -796,6 +809,7 @@ class _Chip(QWidget):
         super().__init__(parent)
         self._text = caps(text)
         self._theme = theme
+        self._color_index = color_index
         pal = theme.palette
         self._color = pal.teal if color_index == 0 else pal.listening
         font = mono_font(FONT.label, spacing=1.5)
@@ -804,6 +818,13 @@ class _Chip(QWidget):
         self.setFixedSize(width, 18)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setAccessibleName(self._text)
+
+    def set_theme(self, theme: Theme) -> None:
+        """Ganti tema chip."""
+        self._theme = theme
+        pal = theme.palette
+        self._color = pal.teal if self._color_index == 0 else pal.listening
+        self.update()
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         del event

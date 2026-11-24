@@ -11,6 +11,7 @@ from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH).resolve().parent
 MODEL_DIR = ROOT / "jarvis_hands" / "assets" / "models"
+ICON_DIR = ROOT / "jarvis_hands" / "assets" / "icons"
 
 # MediaPipe membawa binary dan data internal; PyInstaller tidak punya hook
 # lengkap untuk semua modulnya, jadi seluruh paket ikut dikumpulkan.
@@ -24,6 +25,9 @@ a = Analysis(
         (str(MODEL_DIR / "hand_landmarker.task"), "jarvis_hands/assets/models"),
         (str(MODEL_DIR / "LICENSE"), "jarvis_hands/assets/models"),
         (str(MODEL_DIR / "README.md"), "jarvis_hands/assets/models"),
+        (str(ICON_DIR / "chevron-down.svg"), "jarvis_hands/assets/icons"),
+        (str(ICON_DIR / "chevron-up.svg"), "jarvis_hands/assets/icons"),
+        (str(ICON_DIR / "check.svg"), "jarvis_hands/assets/icons"),
     ]
     + mediapipe_datas,
     hiddenimports=mediapipe_hiddenimports

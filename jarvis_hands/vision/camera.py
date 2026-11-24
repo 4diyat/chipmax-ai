@@ -304,6 +304,20 @@ class CameraController(QObject):
         """Pesan kesalahan terakhir (kosong bila tidak ada)."""
         return self._last_error
 
+    @property
+    def config(self) -> CameraConfig:
+        """Konfigurasi yang dipakai pada penyalaan berikutnya."""
+        return self._config
+
+    def set_config(self, config: CameraConfig) -> None:
+        """Simpan konfigurasi untuk penyalaan kamera berikutnya.
+
+        Worker yang sedang berjalan memakai salinan konfigurasi saat ``start``;
+        perubahan tidak mengganggu sesi aktif dan diterapkan saat kamera
+        dinyalakan lagi.
+        """
+        self._config = config
+
     def start(self) -> bool:
         """Nyalakan kamera. Return False bila sudah menyala."""
         if self._thread is not None:

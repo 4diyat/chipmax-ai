@@ -8,11 +8,12 @@ menyelesaikan atau melewati panduan.
 
 from __future__ import annotations
 
+import html
 from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCloseEvent, QImage, QPixmap
+from PySide6.QtGui import QCloseEvent, QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -28,9 +29,10 @@ from PySide6.QtWidgets import (
 
 from jarvis_hands.core.config import AppConfig, ConfigError, save_config
 from jarvis_hands.gestures.engine import GestureEngine
-from jarvis_hands.ui.agent_settings import SETTINGS_QSS
+from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.camera import CameraIndicator
-from jarvis_hands.ui.tokens import Theme, build_theme
+from jarvis_hands.ui.qss import dialog_qss
+from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font, sans_font, with_alpha
 from jarvis_hands.vision.camera import Frame
 from jarvis_hands.vision.session import CameraSession
 from jarvis_hands.vision.tracker import TrackingResult
@@ -69,19 +71,21 @@ class OnboardingDialog(QDialog):
         self.setWindowTitle("Panduan · JARVIS")
         self.setObjectName("onboarding-dialog")
         self.resize(820, 620)
-        self.setStyleSheet(SETTINGS_QSS)
+        self.setStyleSheet(dialog_qss(self._theme))
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(16)
         head = QHBoxLayout()
         title = QLabel("PANDUAN KAMERA & GESTUR")
-        title.setStyleSheet("color: #6fe5d6; font-size: 16px; font-weight: bold;")
+        title.setFont(mono_font(FONT.body))
+        title.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
         head.addWidget(title)
         head.addStretch(1)
         self.step_label = QLabel("1 / 4")
         self.step_label.setObjectName("onboarding-step")
-        self.step_label.setStyleSheet("color: #a8d8cf;")
+        self.step_label.setFont(mono_font(FONT.small))
+        self.step_label.setStyleSheet(f"color: {self._theme.palette.muted.name()};")
         head.addWidget(self.step_label)
         root.addLayout(head)
 
@@ -95,7 +99,7 @@ class OnboardingDialog(QDialog):
         self.status = QLabel("Kamera mati · aktifkan hanya bila diperlukan")
         self.status.setObjectName("onboarding-status")
         self.status.setWordWrap(True)
-        self.status.setStyleSheet("color: #f5c269;")
+        self.status.setStyleSheet(f"color: {self._theme.palette.warning.name()};")
         root.addWidget(self.status)
 
         nav = QHBoxLayout()
@@ -122,6 +126,7 @@ class OnboardingDialog(QDialog):
         self.session.landmarks_ready.connect(self._on_tracking)
         self.session.frame_ready.connect(self._on_frame)
         self._show_step(0)
+        enforce_min_targets(self)
 
     # ------------------------------------------------------------------ pages
 
@@ -131,23 +136,29 @@ class OnboardingDialog(QDialog):
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(14)
         title = QLabel("Selamat datang di JARVIS")
-        title.setStyleSheet("color: #ecfffa; font-size: 28px; font-weight: bold;")
+        title.setFont(sans_font(FONT.display, bold=True))
+        title.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         box.addWidget(title)
         box.addWidget(
-            _muted("JARVIS Ring & Hands mengendalikan antarmuka kaca dengan tangan kosong.")
+            _muted(
+                "JARVIS Ring & Hands mengendalikan antarmuka kaca dengan tangan kosong.",
+                self._theme,
+            )
         )
-        box.addWidget(_muted("Tiga hal yang perlu diketahui:"))
+        box.addWidget(_muted("Tiga hal yang perlu diketahui:", self._theme))
         for text in (
             "Cubit jempol–telunjuk untuk mengetuk, menahan, dan menyeret.",
             "Kamera hanya menyala saat Anda menyalakannya; frame diproses lokal.",
             "Tidak ada frame yang disimpan atau dikirim; indikator kamera selalu terlihat.",
         ):
-            box.addWidget(_bullet(text))
-        box.addStretch(1)
+            box.addWidget(_bullet(text, self._theme))
+        # Catatan kaki mengikuti isi langsung; sisa ruang jatuh ke bawah halaman
+        # supaya tidak ada celah besar di tengah (pola yang sama dengan langkah akhir).
         note = QLabel("Mouse dan keyboard tetap tersedia sebagai jalur cadangan.")
         note.setWordWrap(True)
-        note.setStyleSheet("color: #8ff0e4;")
+        note.setStyleSheet(f"color: {self._theme.palette.accent.name()};")
         box.addWidget(note)
+        box.addStretch(1)
         return page
 
     def _build_camera(self) -> QWidget:
@@ -156,12 +167,14 @@ class OnboardingDialog(QDialog):
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(14)
         title = QLabel("Nyalakan kamera")
-        title.setStyleSheet("color: #ecfffa; font-size: 24px; font-weight: bold;")
+        title.setFont(sans_font(FONT.title, bold=True))
+        title.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         box.addWidget(title)
         box.addWidget(
             _muted(
                 "Uji kamera dan izin akses. Pratinjau hanya ada di layar ini; "
-                "frame tidak pernah ditulis ke disk."
+                "frame tidak pernah ditulis ke disk.",
+                self._theme,
             )
         )
         row = QHBoxLayout()
@@ -170,8 +183,12 @@ class OnboardingDialog(QDialog):
         self.preview.setAccessibleName("Pratinjau kamera lokal")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setFixedSize(320, 180)
+        stage_bg = with_alpha(self._theme.palette.stage, 0.85).name(QColor.NameFormat.HexArgb)
+        edge = with_alpha(self._theme.palette.border, 0.55).name(QColor.NameFormat.HexArgb)
         self.preview.setStyleSheet(
-            "background: #04100f; border: 1px solid #548f88; border-radius: 10px;color: #688d87;"
+            f"background: {stage_bg}; border: 1px solid {edge}; "
+            f"border-radius: {self._theme.style.control_radius:.0f}px; "
+            f"color: {self._theme.palette.muted.name()};"
         )
         row.addWidget(self.preview)
         side = QVBoxLayout()
@@ -193,7 +210,10 @@ class OnboardingDialog(QDialog):
         box.addLayout(row)
         box.addStretch(1)
         box.addWidget(
-            _muted("Izin kamera diminta oleh sistem operasi saat kamera pertama dinyalakan.")
+            _muted(
+                "Izin kamera diminta oleh sistem operasi saat kamera pertama dinyalakan.",
+                self._theme,
+            )
         )
         return page
 
@@ -203,9 +223,10 @@ class OnboardingDialog(QDialog):
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(14)
         title = QLabel("Gestur dasar")
-        title.setStyleSheet("color: #ecfffa; font-size: 24px; font-weight: bold;")
+        title.setFont(sans_font(FONT.title, bold=True))
+        title.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         box.addWidget(title)
-        box.addWidget(_muted("Cubit adalah jempol dan telunjuk yang dirapatkan."))
+        box.addWidget(_muted("Cubit adalah jempol dan telunjuk yang dirapatkan.", self._theme))
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(12)
@@ -217,7 +238,7 @@ class OnboardingDialog(QDialog):
         )
         for index, (head, body) in enumerate(cards):
             row, col = divmod(index, 2)
-            grid.addWidget(_gesture_card(head, body), row, col)
+            grid.addWidget(_gesture_card(head, body, self._theme), row, col)
         box.addLayout(grid)
         self.gesture_camera_button = QPushButton("NYALAKAN KAMERA")
         self.gesture_camera_button.setObjectName("onboarding-gesture-camera")
@@ -229,7 +250,9 @@ class OnboardingDialog(QDialog):
         self.coach_status.setAccessibleName("Status latihan gestur")
         self.coach_status.setWordWrap(True)
         self.coach_status.setStyleSheet(
-            "color: #8ff0e4; border: 1px solid #35514d; border-radius: 8px; padding: 10px;"
+            f"color: {self._theme.palette.accent.name()}; "
+            f"border: 1px solid {_rgba(self._theme.palette.border, 0.35)}; "
+            f"border-radius: {self._theme.style.control_radius:.0f}px; padding: 10px;"
         )
         box.addWidget(self.coach_status)
         box.addStretch(1)
@@ -241,16 +264,21 @@ class OnboardingDialog(QDialog):
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(14)
         title = QLabel("Siap digunakan")
-        title.setStyleSheet("color: #ecfffa; font-size: 24px; font-weight: bold;")
+        title.setFont(sans_font(FONT.title, bold=True))
+        title.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         box.addWidget(title)
         box.addWidget(
             _muted(
                 "Nyalakan kamera dari jendela kontrol kapan saja. "
-                "Ctrl+Alt+G menjeda gestur tanpa mematikan kamera."
+                "Ctrl+Alt+G menjeda gestur tanpa mematikan kamera.",
+                self._theme,
             )
         )
         box.addWidget(
-            _muted("Pengaturan tampilan, kamera, dan gestur tersedia di jendela kontrol.")
+            _muted(
+                "Pengaturan tampilan, kamera, dan gestur tersedia di jendela kontrol.",
+                self._theme,
+            )
         )
         self.finish_choice = QCheckBox("Jangan tampilkan panduan ini lagi")
         self.finish_choice.setObjectName("onboarding-dont-show")
@@ -402,7 +430,8 @@ class OnboardingDialog(QDialog):
 
     def _set_status(self, text: str, *, error: bool = False) -> None:
         self.status.setText(text)
-        self.status.setStyleSheet("color: #f5a524;" if error else "color: #f5c269;")
+        color = self._theme.palette.warning if error else self._theme.palette.accent
+        self.status.setStyleSheet(f"color: {color.name()};")
 
     def reject(self) -> None:
         if not self._stop_camera():
@@ -416,34 +445,46 @@ class OnboardingDialog(QDialog):
         super().closeEvent(event)
 
 
-def _muted(text: str) -> QLabel:
+def _rgba(color: QColor, alpha: float) -> str:
+    """QColor + alpha menjadi ``rgba(...)`` untuk stylesheet."""
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {max(0.0, min(1.0, alpha)):.3f})"
+
+
+def _muted(text: str, theme: Theme) -> QLabel:
     label = QLabel(text)
     label.setWordWrap(True)
-    label.setStyleSheet("color: #c2e8e1;")
+    label.setStyleSheet(f"color: {theme.palette.muted.name()};")
     return label
 
 
-def _bullet(text: str) -> QLabel:
-    label = QLabel("•  " + text)
+def _bullet(text: str, theme: Theme) -> QLabel:
+    label = QLabel()
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setText(
+        f"<p style='margin-left:16px; text-indent:-16px;'>•&nbsp;&nbsp;{html.escape(text)}</p>"
+    )
     label.setWordWrap(True)
-    label.setStyleSheet("color: #c2e8e1; padding-left: 6px;")
+    label.setStyleSheet(f"color: {theme.palette.muted.name()};")
     return label
 
 
-def _gesture_card(head: str, body: str) -> QFrame:
+def _gesture_card(head: str, body: str, theme: Theme) -> QFrame:
     card = QFrame()
     card.setStyleSheet(
-        "QFrame { background: #112524; border: 1px solid #548f88; border-radius: 10px; }"
+        f"QFrame {{ background: {_rgba(theme.palette.teal, 0.08)}; "
+        f"border: 1px solid {_rgba(theme.palette.border, 0.55)}; "
+        f"border-radius: {theme.style.control_radius:.0f}px; }}"
         "QLabel { border: none; }"
     )
     box = QVBoxLayout(card)
     box.setContentsMargins(14, 12, 14, 12)
     box.setSpacing(4)
     title = QLabel(head)
-    title.setStyleSheet("color: #6fe5d6; font-weight: bold;")
+    title.setFont(mono_font(FONT.small))
+    title.setStyleSheet(f"color: {theme.palette.teal.name()};")
     box.addWidget(title)
     text = QLabel(body)
     text.setWordWrap(True)
-    text.setStyleSheet("color: #c2e8e1;")
+    text.setStyleSheet(f"color: {theme.palette.muted.name()};")
     box.addWidget(text)
     return card

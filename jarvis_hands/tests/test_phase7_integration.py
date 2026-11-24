@@ -90,3 +90,96 @@ def test_control_settings_apply_display_and_gestures(
     assert (tmp_path / "config.json").exists()
     dialog.close()
     control.close()
+
+
+def test_camera_settings_reach_session_for_next_start(
+    qtbot: Any, qapp: QApplication, tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(
+        "jarvis_hands.agent.settings.settings_path", lambda: tmp_path / "agent.json"
+    )
+    control = ControlWindow(
+        AppConfig.default(), qapp.screens(), config_path=tmp_path / "config.json"
+    )
+    qtbot.addWidget(control)
+    control.show()
+    control.settings_button.click()
+    dialog = control._settings_dialog
+    assert isinstance(dialog, SettingsDialog)
+    dialog.camera_page.index.setValue(3)
+    dialog.camera_page.frame_width.setValue(1280)
+    dialog.camera_page.analysis_fps.setValue(12)
+    dialog._save()
+    assert control.session.config.index == 3
+    assert control.session.controller.config.index == 3
+    assert control.session.controller.config.width == 1280
+    assert control.session.controller.config.analysis_fps == 12
+    dialog.close()
+    control.close()
+
+
+def test_onboarding_config_reaches_session(
+    qtbot: Any, qapp: QApplication, tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(
+        "jarvis_hands.agent.settings.settings_path", lambda: tmp_path / "agent.json"
+    )
+    control = ControlWindow(
+        AppConfig.default(), qapp.screens(), config_path=tmp_path / "config.json"
+    )
+    qtbot.addWidget(control)
+    control.show()
+    config = replace(
+        AppConfig.default(),
+        camera=replace(AppConfig.default().camera, index=2, height=720),
+    )
+    control._onboarding_done(config)
+    assert control.session.config.index == 2
+    assert control.session.controller.config.height == 720
+    control.close()
+
+
+def test_overlay_apply_config_propagates_high_contrast(qtbot: Any, qapp: QApplication) -> None:
+    overlay, session, _controller, _backend = make_overlay(qtbot, qapp)
+    assert overlay._theme.high_contrast is False
+    config = replace(
+        AppConfig.default(),
+        display=replace(AppConfig.default().display, high_contrast=True),
+    )
+    overlay.apply_config(config)
+    assert bool(overlay._theme.high_contrast) is True
+    assert overlay.ring._theme.high_contrast is True
+    assert overlay.orb._theme.high_contrast is True
+    assert overlay.card._theme.high_contrast is True
+    assert overlay.response_panel._theme.high_contrast is True
+    assert overlay.tree._tree_theme.high_contrast is True
+    assert overlay.indicator._theme.high_contrast is True
+    assert overlay.hand_cursor._theme.high_contrast is True
+    overlay.apply_config(replace(AppConfig.default()))
+    assert bool(overlay._theme.high_contrast) is False
+    assert bool(overlay.ring._theme.high_contrast) is False
+    session.stop()
+    overlay.close()
+
+
+def test_control_window_follows_high_contrast_setting(
+    qtbot: Any, qapp: QApplication, tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(
+        "jarvis_hands.agent.settings.settings_path", lambda: tmp_path / "agent.json"
+    )
+    control = ControlWindow(
+        AppConfig.default(), qapp.screens(), config_path=tmp_path / "config.json"
+    )
+    qtbot.addWidget(control)
+    control.show()
+    control.settings_button.click()
+    dialog = control._settings_dialog
+    assert isinstance(dialog, SettingsDialog)
+    dialog.display_page.high_contrast.setChecked(True)
+    dialog._save()
+    assert control._theme.high_contrast is True
+    assert control.overlay._theme.high_contrast is True
+    assert control.overlay.ring._theme.high_contrast is True
+    dialog.close()
+    control.close()

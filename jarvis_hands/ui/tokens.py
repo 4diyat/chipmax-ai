@@ -150,6 +150,8 @@ class GlassStyle:
 
     border_width: float = 1.5
     radius: float = 20.0
+    #: Radius kontrol (tombol, input, group box); satu tingkat di bawah panel.
+    control_radius: float = 12.0
     surface_alpha_min: float = 0.18
     surface_alpha_max: float = 0.30
     border_alpha: float = 0.55

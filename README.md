@@ -317,16 +317,26 @@ Semua ambang ada di `GestureThresholds` dan dapat diubah lewat konfigurasi JSON.
 Kaca: gradien tembus 18–30%, tepi 1.5 px `rgba(140,240,225,.55)`, highlight
 inset di atas. Huruf isi Space Grotesk (fallback Inter/Segoe UI/DejaVu Sans),
 label mono kapital berjarak 2–4 px (fallback JetBrains Mono/Consolas/DejaVu Sans
-Mono). Font tidak dibundel agar lisensi tetap bersih.
+Mono). Font tidak dibundel agar lisensi tetap bersih. Skala huruf di
+`tokens.FontTokens`: display 30 pt, title 20 pt, body 14 pt, small 12 pt, label
+10 pt; tidak ada ukuran huruf lepas di modul UI.
 
 Metrik: cincin 440 px, pita 20 px, 48 tick, orb 112 px, kursor 28 px, titik idle
-16 px, target ketuk minimal 56 px.
+16 px, target ketuk minimal 56 px. Radius panel 20 px dan radius kontrol 12 px
+(`GlassStyle.control_radius`).
+
+### QSS bersama
+
+`ui/qss.py` membangun stylesheet dialog/jendela kontrol dari palet `Theme`, jadi
+tidak ada warna hex lepas dan tema kontras tinggi otomatis dipakai. Guard statis
+`tests/test_design_system.py` memblokir hex literal, `font-size` lepas, dan
+pemanggilan `sans_font(<angka>)`/`mono_font(<angka>)` di luar `tokens.py`.
 
 ## Aksesibilitas
 
 - Semua kontrol punya jalur mouse dan keyboard (tombol tetap `QPushButton`).
-- Target ketuk >= 56 px; tinggi tombol >= 44 px. Audit otomatis memeriksa
-  `minimumHeight` tombol dan nama aksesibel input/tombol.
+- Target ketuk >= 56 px; tinggi tombol dan input >= 44 px. Audit otomatis
+  memeriksa `minimumHeight` tombol/input dan nama aksesibel input/tombol.
 - Tema kontras tinggi (`--high-contrast`) memakai panggung hitam dan teks putih
   (rasio 21:1); teks redup tetap >= 15:1.
 - `accessibleName`/`accessibleDescription` untuk tombol, status, toast, petunjuk,

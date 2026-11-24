@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QColor
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -34,26 +34,16 @@ from jarvis_hands.agent.settings import (
     resolve_key,
     save_settings,
 )
+from jarvis_hands.ui.accessibility import enforce_min_targets
+from jarvis_hands.ui.qss import SETTINGS_QSS, dialog_qss, style_form_labels
+from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font, sans_font
 
-#: Style kaca gelap bersama untuk semua halaman pengaturan.
-SETTINGS_QSS = """
-QDialog { background: #070d0f; color: #ecfffa; }
-QWidget { color: #ecfffa; }
-QLabel { color: #c2e8e1; }
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-    background: #112524; color: #ecfffa;
-    border: 1px solid #548f88; border-radius: 8px; padding: 9px; }
-QComboBox QAbstractItemView { background: #112524; color: #ecfffa; }
-QPushButton, QToolButton { background: #112524; color: #c9f9f1;
-    border: 1px solid #548f88; border-radius: 8px; padding: 10px; }
-QPushButton:checked { background: #22534e; border: 2px solid #6fe5d6; }
-QPushButton:disabled { color: #536963; border-color: #354743; }
-QCheckBox { spacing: 10px; }
-QGroupBox { border: 1px solid #35514d; border-radius: 10px; margin-top: 14px;
-    padding-top: 12px; font-weight: bold; }
-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px;
-    color: #8ff0e4; }
-"""
+__all__ = ["SETTINGS_QSS", "AgentSettingsDialog", "AgentSettingsPage"]
+
+
+def _rgba(color: QColor, alpha: float) -> str:
+    """QColor + alpha menjadi ``rgba(...)`` untuk stylesheet."""
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {max(0.0, min(1.0, alpha)):.3f})"
 
 
 class AgentSettingsPage(QWidget):
@@ -73,9 +63,12 @@ class AgentSettingsPage(QWidget):
         *,
         path: Path | None = None,
         show_save: bool = True,
+        embedded: bool = False,
+        theme: Theme | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self._theme = theme or build_theme()
         self._draft = AgentSettings(settings.provider, dict(settings.models), settings.ollama_url)
         self._store = store
         self._path = path
@@ -86,17 +79,20 @@ class AgentSettingsPage(QWidget):
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(26)
-        side = QVBoxLayout()
-        heading = QLabel("AGEN & API")
-        heading.setStyleSheet("color: #6fe5d6; font-size: 17px; font-weight: bold;")
-        side.addWidget(heading)
-        side.addWidget(QLabel("Penyedia teks dan kredensial"))
-        side.addStretch(1)
-        root.addLayout(side, 1)
+        if not embedded:
+            side = QVBoxLayout()
+            heading = QLabel("AGEN & API")
+            heading.setFont(mono_font(FONT.body))
+            heading.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
+            side.addWidget(heading)
+            side.addWidget(QLabel("Penyedia teks dan kredensial"))
+            side.addStretch(1)
+            root.addLayout(side, 1)
         body = QVBoxLayout()
         body.setSpacing(12)
         title = QLabel("Agen & API")
-        title.setStyleSheet("color: #ecfffa; font-size: 25px; font-weight: bold;")
+        title.setFont(sans_font(FONT.title, bold=True))
+        title.setStyleSheet(f"color: {self._theme.palette.text.name()};")
         body.addWidget(title)
         body.addWidget(QLabel("Pilih penyedia dan atur kunci API di perangkat ini"))
         body.addWidget(QLabel("JENIS AGEN"))
@@ -132,7 +128,8 @@ class AgentSettingsPage(QWidget):
         self.key.setObjectName("agent-key")
         self.key.setAccessibleName("API key")
         self.key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key.setPlaceholderText("Masukkan key baru; kosongkan untuk mempertahankan")
+        self.key.setPlaceholderText("Masukkan key baru")
+        self.key.setToolTip("Kosongkan untuk mempertahankan key yang tersimpan.")
         keyrow = QHBoxLayout()
         keyrow.addWidget(self.key, 1)
         self.eye = QToolButton()
@@ -143,6 +140,7 @@ class AgentSettingsPage(QWidget):
         self.eye.toggled.connect(self._toggle_key)
         keyrow.addWidget(self.eye)
         form.addRow("API KEY", keyrow)
+        style_form_labels(form)
         body.addLayout(form)
         self.key_status = QLabel()
         self.key_status.setObjectName("credential-status")
@@ -175,13 +173,16 @@ class AgentSettingsPage(QWidget):
         )
         notice.setWordWrap(True)
         notice.setStyleSheet(
-            "color: #f5c269; border: 1px solid #856c36; border-radius: 8px; padding: 12px;"
+            f"color: {self._theme.palette.warning.name()}; "
+            f"border: 1px solid {_rgba(self._theme.palette.warning, 0.55)}; "
+            f"border-radius: {self._theme.style.control_radius:.0f}px; padding: 12px;"
         )
         body.addStretch(1)
         body.addWidget(notice)
-        root.addLayout(body, 4)
+        root.addLayout(body, 1 if embedded else 4)
         initial = list(Provider).index(settings.provider)
         self._select_provider(initial)
+        enforce_min_targets(self)
 
     # ------------------------------------------------------------------ draft
 
@@ -306,14 +307,16 @@ class AgentSettingsDialog(QDialog):
         store: CredentialStore,
         *,
         path: Path | None = None,
+        theme: Theme | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self._theme = theme or build_theme()
         self.setWindowTitle("Pengaturan · Agen & API")
         self.setObjectName("agent-settings")
-        self.resize(900, 600)
-        self.setStyleSheet(SETTINGS_QSS)
-        self.page = AgentSettingsPage(settings, store, path=path, parent=self)
+        self.resize(900, 620)
+        self.setStyleSheet(dialog_qss(self._theme))
+        self.page = AgentSettingsPage(settings, store, path=path, theme=self._theme, parent=self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.addWidget(self.page)
