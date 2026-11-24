@@ -47,8 +47,10 @@ from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.autohide import AutoHideController
 from jarvis_hands.ui.camera import CameraIndicator
 from jarvis_hands.ui.card import Card, Panel
+from jarvis_hands.ui.catalog import HintBar, ToastPreview
+from jarvis_hands.ui.chrome import ChromeMode, ChromeToggle
 from jarvis_hands.ui.cursor import CursorWidget
-from jarvis_hands.ui.glass import SurfaceHit
+from jarvis_hands.ui.glass import SurfaceHit, idle_dot_hit_rect, paint_idle_dot
 from jarvis_hands.ui.onboarding import OnboardingDialog
 from jarvis_hands.ui.orb import Orb
 from jarvis_hands.ui.qss import dialog_qss
@@ -82,6 +84,7 @@ class OverlayWindow(QWidget):
         self._pinch_started: int | None = None
         self._chrome_hidden = False
         self._chrome_visible: list[tuple[QWidget, bool]] = []
+        self._dot_hover = False
         self._screen_geometry = QRect(screen.geometry())
         geo = self._screen_geometry
         self.engine = GestureEngine(
@@ -120,6 +123,17 @@ class OverlayWindow(QWidget):
         self.tree = TreePane(config.memory_root, theme=self._theme, parent=self)
         self.tree.close_requested.connect(self.tree.hide)
         self.tree.hide()
+        # Toast kanan atas dan baris petunjuk bawah adalah chrome overlay Fase 4.
+        self.toast = ToastPreview(self._theme, parent=self)
+        self.toast.hide()
+        self._toast_timer = QTimer(self)
+        self._toast_timer.setSingleShot(True)
+        self._toast_timer.setInterval(4200)
+        self._toast_timer.timeout.connect(self.toast.hide)
+        self.hint = HintBar(self._theme, parent=self)
+        session.fps_changed.connect(self._update_hint)
+        self.chrome = ChromeToggle(parent=self)
+        self.chrome.mode_changed.connect(self._chrome_mode_changed)
         self.indicator = CameraIndicator(self._theme, parent=self)
         session.attach_indicator(self.indicator)
         self.autohide = AutoHideController(
@@ -206,11 +220,18 @@ class OverlayWindow(QWidget):
         self.tree.resize(min(max(620, w - 40), 1000), min(max(350, h - 40), 480))
         self.tree.move(max(0, (w - self.tree.width()) // 2), max(0, (h - self.tree.height()) // 2))
         self.tree.set_bounds(QRectF(0, 0, w, h))
-        self.orb.move(12, 12)
+        self.orb.move(
+            min(max(0, self.ring.x() + self.ring.width() - 40), max(0, w - self.orb.width() - 16)),
+            self.ring.y() + 44,
+        )
         self.response_panel.resize(min(520, max(300, w - 32)), min(300, max(200, h - 32)))
         self.response_panel.move(16, max(0, h - self.response_panel.height() - 16))
         self.response_panel.set_bounds(QRectF(0, 0, w, h))
         self.indicator.move(max(0, w - self.indicator.width() - 18), 18)
+        self.toast.move(max(0, w - self.toast.width() - 18), 18 + self.indicator.height() + 10)
+        hint_w = max(320, min(self.hint.preferred_width(), w - 96))
+        self.hint.resize(hint_w, self.hint.height())
+        self.hint.move(max(0, (w - hint_w) // 2), max(0, h - self.hint.height() - 24))
         self.indicator.raise_()
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
@@ -232,6 +253,51 @@ class OverlayWindow(QWidget):
         self.response_panel.raise_()
         self.indicator.raise_()
         self.autohide.poke()
+
+    def _update_hint(self, fps: float = 0.0) -> None:
+        """Baris petunjuk kanan mengikuti status kamera (bukan angka tetap)."""
+        if self.session.is_active and not self.session.is_paused:
+            right = f"KAMERA AKTIF · {round(fps)} FPS · LOKAL"
+        elif self.session.is_paused:
+            right = "KAMERA JEDA · CTRL+ALT+G"
+        else:
+            right = "SEMUA AKSI ADA JALAN NON-GESTUR"
+        if right != self.hint.right_text:
+            self.hint.set_right(right)
+            self._layout_items()
+
+    def show_toast(self, text: str, *, detail: str = "") -> None:
+        """Tampilkan toast kanan atas; hilang sendiri setelah beberapa detik."""
+        self.toast.set_message(text, detail)
+        self.toast.show()
+        self.toast.raise_()
+        self.indicator.raise_()
+        self._toast_timer.start()
+        self.autohide.poke()
+
+    def cycle_chrome(self) -> ChromeMode:
+        """Putar status chrome lewat hotkey ``Ctrl+Alt+C``."""
+        return self.chrome.cycle()
+
+    def _chrome_mode_changed(self, mode: ChromeMode) -> None:
+        """Terapkan status chrome baru tanpa mengubah status indikator."""
+        if mode is ChromeMode.ON:
+            self.autohide.set_enabled(False)
+            self._set_chrome_hidden(False)
+            self.show_toast("Chrome tampil", detail="Ctrl+Alt+C untuk sembunyikan")
+        elif mode is ChromeMode.OFF:
+            self.autohide.set_enabled(False)
+            self._set_chrome_hidden(True)
+            self.show_toast("Chrome disembunyikan", detail="Titik 16 px di bawah layar")
+        else:
+            self.autohide.set_enabled(self.config.display.auto_hide_enabled)
+            self._set_chrome_hidden(False)
+        self.update()
+
+    @property
+    def hint_visible(self) -> bool:
+        """True bila baris petunjuk tampil (chrome terlihat)."""
+        return self.hint.isVisible()
 
     # ------------------------------------------------------------------ settings
 
@@ -265,6 +331,8 @@ class OverlayWindow(QWidget):
         self.response_panel.set_theme(self._theme)
         self.tree.set_theme(self._theme)
         self.indicator.set_theme(self._theme)
+        self.toast.set_theme(self._theme)
+        self.hint.set_theme(self._theme)
         self.hand_cursor.set_theme(self._theme)
         self._style_response_text()
         self.setStyleSheet(dialog_qss(self._theme))
@@ -275,11 +343,17 @@ class OverlayWindow(QWidget):
         self.autohide.set_hold(hold)
 
     def _set_chrome_hidden(self, hidden: bool) -> None:
-        """Sembunyikan/tampilkan ring, orb, dan kartu; indikator tetap."""
+        """Sembunyikan/tampilkan ring, orb, kartu, hint, dan toast; indikator tetap.
+
+        Saat tersembunyi, hanya titik idle 16 px yang tampil supaya pengguna
+        tahu chrome masih bisa dipanggil kembali.
+        """
         if hidden == self._chrome_hidden:
             return
         self._chrome_hidden = hidden
-        targets: tuple[QWidget, ...] = (self.ring, self.orb, self.card)
+        if hidden:
+            self.toast.hide()
+        targets: tuple[QWidget, ...] = (self.ring, self.orb, self.card, self.hint)
         if hidden:
             self._chrome_visible = [(widget, widget.isVisible()) for widget in targets]
             for widget in targets:
@@ -291,15 +365,34 @@ class OverlayWindow(QWidget):
                     widget.show()
                     widget.raise_()
             self._chrome_visible = []
+        self.update()
         self.indicator.raise_()
 
     # ------------------------------------------------------------------ mouse
 
+    def _dot_at(self, event: QMouseEvent) -> bool:
+        """True bila kursor berada di area titik idle (saat chrome tersembunyi)."""
+        if not self._chrome_hidden:
+            return False
+        return idle_dot_hit_rect(QRectF(self.rect())).contains(event.position())
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        hover = self._dot_at(event)
+        if hover != self._dot_hover:
+            self._dot_hover = hover
+            self.setCursor(
+                Qt.CursorShape.PointingHandCursor if hover else Qt.CursorShape.ArrowCursor
+            )
+            self.update()
         self.autohide.poke()
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._dot_at(event) and event.button() == Qt.MouseButton.LeftButton:
+            # Ketuk titik idle = tampilkan chrome lagi.
+            self.chrome.set_mode(ChromeMode.ON)
+            event.accept()
+            return
         self.autohide.poke()
         super().mousePressEvent(event)
 
@@ -342,6 +435,8 @@ class OverlayWindow(QWidget):
                 else KEY_COLOR_HEX[color]
             )
             painter.fillRect(self.rect(), QColor(value))
+        if self._chrome_hidden:
+            paint_idle_dot(painter, QRectF(self.rect()), self._theme, hover=self._dot_hover)
         painter.end()
 
     def _position_indicator(self, fps: float = 0.0) -> None:
@@ -354,6 +449,13 @@ class OverlayWindow(QWidget):
             self._image = QImage()
             self.update()
         self.indicator.move(max(0, self.width() - self.indicator.width() - 18), 18)
+        # Toast status kamera, sama seperti mockup ("Mode gestur aktif").
+        self.show_toast(
+            "Mode gestur aktif" if active else "Mode gestur nonaktif",
+            detail="Kamera menyala · video tidak disimpan"
+            if active
+            else "Kamera mati · aktifkan hanya bila diperlukan",
+        )
 
     def _paused_changed(self, paused: bool) -> None:
         if paused:
@@ -605,6 +707,8 @@ class ControlWindow(QWidget):
         self.mode.setAccessibleName("Mode tampilan")
         self.monitor.setAccessibleName("Monitor tampilan")
         enforce_min_targets(self)
+        self._chrome_shortcut = QShortcut(QKeySequence("Ctrl+Alt+C"), self)
+        self._chrome_shortcut.activated.connect(self.overlay.cycle_chrome)
         self._settings_shortcut = QShortcut(QKeySequence("Ctrl+,"), self)
         self._settings_shortcut.activated.connect(self._open_settings)
         self._guide_shortcut = QShortcut(QKeySequence("F1"), self)

@@ -19,14 +19,59 @@ __all__ = [
     "SurfaceHit",
     "close_rect",
     "handle_rect",
+    "idle_dot_hit_rect",
+    "idle_dot_rect",
     "paint_card_surface",
     "paint_close",
     "paint_handle",
+    "paint_idle_dot",
     "paint_shadow",
 ]
 
 HANDLE_SIZE = QSizeF(float(METRICS.handle_width), float(METRICS.handle_height))
 CLOSE_TARGET = 44.0
+#: Jarak titik idle dari tepi bawah layar (mockup: "titik 16 px").
+IDLE_DOT_MARGIN = 18.0
+
+
+def paint_shadow(painter: QPainter, rect: QRectF, *, radius: float = 20.0) -> None:
+    """Bayangan lembut di bawah kartu."""
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(0, 0, 0, 100))
+    painter.drawRoundedRect(rect.adjusted(5, 9, -5, 9), radius, radius)
+
+
+def idle_dot_rect(area: QRectF) -> QRectF:
+    """Kotak 16x16 di tengah bawah layar untuk titik idle."""
+    size = float(METRICS.idle_dot)
+    return QRectF(area.center().x() - size / 2, area.bottom() - IDLE_DOT_MARGIN - size, size, size)
+
+
+def paint_idle_dot(painter: QPainter, area: QRectF, theme: Theme, *, hover: bool = False) -> None:
+    """Titik teal 16 px: satu-satunya penanda chrome saat disembunyikan.
+
+    Target ketuknya tetap 44 px lewat :func:`idle_dot_hit_rect`, tetapi yang
+    terlihat hanya inti 16 px agar tidak mengganggu layar.
+    """
+    rect = idle_dot_rect(area)
+    color = theme.palette.accent if hover else theme.palette.teal
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    halo = QRectF(rect).adjusted(-6, -6, 6, 6)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(with_alpha(color, 0.10))
+    painter.drawEllipse(halo)
+    painter.setPen(QPen(with_alpha(color, 0.85), 1.2))
+    painter.setBrush(with_alpha(color, 0.55 if hover else 0.35))
+    painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
+    painter.restore()
+
+
+def idle_dot_hit_rect(area: QRectF) -> QRectF:
+    """Area sentuh 44x44 di sekitar titik idle."""
+    center = idle_dot_rect(area).center()
+    half = 22.0
+    return QRectF(center.x() - half, center.y() - half, half * 2, half * 2)
 
 
 @unique
@@ -99,10 +144,3 @@ def paint_card_surface(
         border=with_alpha(theme.palette.accent, 0.75) if accent else None,
         radius=radius,
     )
-
-
-def paint_shadow(painter: QPainter, rect: QRectF, *, radius: float = 20.0) -> None:
-    """Bayangan lembut di bawah kartu."""
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QColor(0, 0, 0, 100))
-    painter.drawRoundedRect(rect.adjusted(5, 9, -5, 9), radius, radius)

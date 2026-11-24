@@ -55,6 +55,7 @@ __all__ = [
     "paint_stage",
     "relative_luminance",
     "resolve_family",
+    "rgba_css",
     "sans_font",
     "status_color",
     "with_alpha",
@@ -445,3 +446,13 @@ def _alpha(color: QColor, alpha: float) -> QColor:
 def with_alpha(color: QColor, alpha: float) -> QColor:
     """Salin QColor dengan alpha baru (0..1), untuk painter eksternal."""
     return _alpha(color, alpha)
+
+
+def rgba_css(color: QColor, alpha: float) -> str:
+    """Warna transparan untuk stylesheet QSS berbentuk ``rgba(r, g, b, a)``.
+
+    QSS tidak memahami ``#AARRGGBB`` (yang justru dibaca terbalik sebagai
+    ``#RRGGBB``), jadi semua alpha di stylesheet harus lewat helper ini.
+    """
+    tinted = _alpha(color, alpha)
+    return f"rgba({tinted.red()}, {tinted.green()}, {tinted.blue()}, {alpha:.3f})"

@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QColor
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -48,6 +48,7 @@ from jarvis_hands.core.config import (
 )
 from jarvis_hands.ui.accessibility import enforce_min_targets
 from jarvis_hands.ui.agent_settings import AgentSettingsPage
+from jarvis_hands.ui.icons import IconGlyph, IconKind, icon_icon
 from jarvis_hands.ui.qss import dialog_qss, style_form_labels
 from jarvis_hands.ui.tokens import FONT, Theme, build_theme, mono_font
 
@@ -57,6 +58,15 @@ __all__ = [
     "GestureSettingsPage",
     "SettingsDialog",
 ]
+
+
+def _plain_label(text: str) -> str:
+    """Tampilkan ``&`` apa adanya pada teks tombol.
+
+    Qt memperlakukan ``&`` sebagai penanda huruf pintas, sehingga "AGEN & API"
+    akan tampil "AGEN_API" tanpa escape ganda.
+    """
+    return text.replace("&", "&&")
 
 
 def _rgba(color: QColor, alpha: float) -> str:
@@ -467,6 +477,22 @@ class GestureSettingsPage(QWidget):
         self.load(AppConfig.default())
 
 
+#: Gaya tombol navigasi sidebar: ikon di kiri, teks mono kapital.
+_NAV_QSS = (
+    "QPushButton { text-align: left; padding-left: 14px; }"
+    "QPushButton:checked { font-weight: bold; }"
+)
+
+
+#: Ikon sidebar per halaman.
+_NAV_ICONS: dict[str, IconKind] = {
+    "agent": IconKind.GEAR,
+    "display": IconKind.DISPLAY,
+    "camera": IconKind.CAMERA,
+    "gesture": IconKind.HAND,
+}
+
+
 class SettingsDialog(QDialog):
     """Pengaturan terpadu: Agen & API, Tampilan, Kamera, dan Gestur."""
 
@@ -501,12 +527,24 @@ class SettingsDialog(QDialog):
         root = QHBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(26)
-        side = QVBoxLayout()
+        side_widget = QWidget()
+        side_widget.setFixedWidth(212)
+        side = QVBoxLayout(side_widget)
+        side.setContentsMargins(0, 0, 0, 0)
         side.setSpacing(6)
         heading = QLabel("PENGATURAN")
-        heading.setFont(mono_font(FONT.body))
+        heading.setFont(mono_font(FONT.body, spacing=6.0))
         heading.setStyleSheet(f"color: {self._theme.palette.teal.name()};")
         side.addWidget(heading)
+        underline = QFrame()
+        underline.setObjectName("sidebar-rule")
+        underline.setFixedHeight(1)
+        underline.setStyleSheet(
+            f"background: {_rgba(self._theme.palette.border, 0.45)}; border: none;"
+        )
+        side.addWidget(underline)
+        side.addSpacing(6)
+        self._nav_icons = _NAV_ICONS
         self._nav = QButtonGroup(self)
         self._nav.setExclusive(True)
         self._nav_buttons: list[QPushButton] = []
@@ -518,19 +556,48 @@ class SettingsDialog(QDialog):
                 ("GESTUR", "gesture"),
             )
         ):
-            button = QPushButton(label)
+            button = QPushButton(_plain_label(label))
             button.setObjectName(f"settings-nav-{name}")
+            button.setProperty("nav", True)
             button.setCheckable(True)
             button.setMinimumHeight(44)
+            button.setIcon(icon_icon(self._nav_icons[name], self._theme.palette.teal, size=18))
+            button.setIconSize(QSize(18, 18))
+            # Ikon di kiri teks dengan jarak 12 px (QSS padding tidak menyisakan
+            # ruang untuk ikon, jadi jarak diatur lewat awalan ruang tipis).
+            button.setStyleSheet(_NAV_QSS)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setAccessibleName(label)
             self._nav.addButton(button, index)
             self._nav_buttons.append(button)
             side.addWidget(button)
         self._nav.idClicked.connect(self._show_page)
         side.addStretch(1)
-        root.addLayout(side, 1)
+        root.addWidget(side_widget)
 
         body = QVBoxLayout()
         body.setSpacing(14)
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        header.addStretch(1)
+        self.logo = IconGlyph(IconKind.BLOOM, self._theme, size=64)
+        self.logo.setAccessibleName("Lambang JARVIS")
+        header.addWidget(self.logo)
+        self.header_close = QPushButton("")
+        self.header_close.setObjectName("close-settings-x")
+        self.header_close.setFlat(True)
+        self.header_close.setFixedSize(44, 44)
+        self.header_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.header_close.setAccessibleName("Tutup pengaturan")
+        self.header_close.setToolTip("Tutup (Esc)")
+        self.header_close.setIcon(icon_icon(IconKind.CLOSE, self._theme.palette.accent, size=20))
+        self.header_close.setStyleSheet(
+            "QPushButton { background: transparent; border: none; padding: 0px; }"
+            "QPushButton:hover, QPushButton:focus { background: transparent; border: none; }"
+        )
+        self.header_close.clicked.connect(self.reject)
+        header.addWidget(self.header_close, 0, Qt.AlignmentFlag.AlignTop)
+        body.addLayout(header)
         self.pages = QStackedWidget()
         self.agent_page = AgentSettingsPage(
             agent_settings,
@@ -567,16 +634,19 @@ class SettingsDialog(QDialog):
         actions.addStretch(1)
         self.save_button = QPushButton("SIMPAN PENGATURAN")
         self.save_button.setObjectName("save-settings")
+        self.save_button.setProperty("primary", True)
+        self.save_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_button.setMinimumHeight(44)
         self.save_button.clicked.connect(self._save)
         actions.addWidget(self.save_button)
         body.addLayout(actions)
-        root.addLayout(body, 4)
+        root.addLayout(body, 1)
 
         self.agent_page.saved.connect(self.agent_saved)
         self.camera_page.onboarding_requested.connect(self.onboarding_requested)
         self.agent_page._tester.busy_changed.connect(self._tester_busy)
         self._nav_buttons[0].setChecked(True)
+        self._nav_buttons[0].setProperty("current", True)
         self.pages.setCurrentIndex(0)
 
     # ------------------------------------------------------------------ props
@@ -596,6 +666,10 @@ class SettingsDialog(QDialog):
 
     def _show_page(self, index: int) -> None:
         self.pages.setCurrentIndex(index)
+        for position, button in enumerate(self._nav_buttons):
+            button.setProperty("current", position == index)
+            button.style().unpolish(button)
+            button.style().polish(button)
 
     def apply_external_config(self, config: AppConfig) -> None:
         """Segarkan draf setelah konfigurasi berubah di luar dialog (onboarding)."""
