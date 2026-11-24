@@ -439,8 +439,7 @@ Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 
 - Ikon merek provider (digambar garis, tidak raster) ditampilkan di samping
   nama di dropdown penyedia; aset raster merek pihak ketiga tidak dibundel.
-- Mockup menggambar cincin lebih tebal (±40 px) daripada metrik produk 20 px;
-  mockup adalah pratinjau, angkanya tetap mengikuti `tokens.METRICS`.
+- Lebar band cincin sekarang 40 px seperti mockup (dahulu 20 px).
 - Tombol keyboard tetap ada di jendela kontrol terpisah (jalan non-gestur) walau
   tidak digambar di mockup.
 

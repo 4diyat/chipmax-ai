@@ -57,7 +57,7 @@ def test_token_catalog_covers_every_color() -> None:
 
 def test_metrics_match_spec() -> None:
     assert METRICS.ring_size == 440
-    assert METRICS.ring_band == 20
+    assert METRICS.ring_band == 40
     assert METRICS.ring_ticks == 48
     assert METRICS.orb_size == 112
     assert METRICS.cursor_size == 28
