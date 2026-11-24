@@ -17,6 +17,8 @@ def test_kind_values() -> None:
         "two_hand",
         "clap",
         "scrub_explode",
+        "swipe",
+        "fist",
     ]
 
 
@@ -43,6 +45,7 @@ def test_event_position_and_flags() -> None:
     assert not event.is_end
     assert event.hands == 1
     assert event.cancelled is False
+    assert event.direction == ""
 
 
 def test_event_is_frozen() -> None:

@@ -433,15 +433,13 @@ Mockup di `docs/mockups/` sudah ditinjau ulang terhadap implementasi nyata
 - **Agen & API**: label mono di atas kolom input, baris "ALAMAT OLLAMA" hanya
   muncul untuk Ollama, ikon mata di dalam kolom key, notice berpagar gembok
   dengan badge status uji di kanan, tombol hapus key jadi ikon tempat sampah.
-- **Overlay**: toast kanan atas, baris petunjuk bawah (kiri petunjuk, kanan status
-  kamera), orb di samping cincin seperti mockup, dan titik idle 16 px.
+- **Overlay**: toast kanan atas, pill kamera di kanan atas (`• KAMERA AKTIF   30 FPS` dengan bullet seperti mockup), baris petunjuk bawah (kiri petunjuk, kanan petunjuk non-gestur), orb di samping cincin seperti mockup, dan titik idle 16 px.
 
 Yang **tetap berbeda karena keputusan produk** (bukan bug visual):
 
-- Nama penyedia memakai label teks (Gemini/Ollama/Claude/ChatGPT), bukan empat
-  logo merek berwarna; logo pihak ketiga tidak dibundel.
-- Mockup menggambar cincin lebih tebal (±40 px) daripada metrik produk 20 px;
-  mockup adalah pratinjau, angkanya tetap mengikuti `tokens.METRICS`.
+- Ikon merek provider (digambar garis, tidak raster) ditampilkan di samping
+  nama di dropdown penyedia; aset raster merek pihak ketiga tidak dibundel.
+- Lebar band cincin sekarang 40 px seperti mockup (dahulu 20 px).
 - Tombol keyboard tetap ada di jendela kontrol terpisah (jalan non-gestur) walau
   tidak digambar di mockup.
 

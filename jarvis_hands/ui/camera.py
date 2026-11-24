@@ -91,11 +91,11 @@ class CameraIndicator(QWidget):
 
     @property
     def label(self) -> str:
-        """Label tampilan saat ini."""
+        """Label tampilan saat ini (dimasukkan bullet seperti mockup)."""
         text = _LABELS[self._state]
         if self._state is CameraState.ACTIVE and self._fps >= 1.0:
-            text += f"  {round(self._fps)} FPS"
-        return text
+            text += f"   {round(self._fps)} FPS"
+        return f"• {text}"
 
     def set_state(self, state: CameraState) -> None:
         """Ganti state; hanya memicu repaint bila berubah."""

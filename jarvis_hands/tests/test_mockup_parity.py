@@ -6,11 +6,13 @@ import re
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QRectF
+from PySide6.QtCore import QRectF, QSize
 from PySide6.QtGui import QColor
 
 from jarvis_hands.agent.settings import AgentSettings, CredentialStore
 from jarvis_hands.core.config import AppConfig
+from jarvis_hands.ui.agent_settings import AgentSettingsDialog
+from jarvis_hands.ui.camera import CameraIndicator, CameraState
 from jarvis_hands.ui.card import Card
 from jarvis_hands.ui.catalog import HintBar, ToastPreview
 from jarvis_hands.ui.chrome import ChromeMode, ChromeToggle
@@ -117,6 +119,121 @@ def test_settings_nav_keeps_ampersand(qtbot: Any) -> None:
 
 @pytest.mark.parametrize("kind", list(IconKind))
 def test_every_icon_renders_pixels(kind: IconKind) -> None:
+    pixmap = icon_pixmap(kind, QColor("#6FE5D6"), size=20)
+    assert not pixmap.isNull()
+    image = pixmap.toImage()
+    opaque = [
+        (x, y)
+        for x in range(image.width())
+        for y in range(image.height())
+        if image.pixelColor(x, y).alpha() > 0
+    ]
+    assert opaque, kind
+
+
+def test_camera_indicator_label_has_bullet_like_mockup(qtbot: Any) -> None:
+    """Pill kamera harus dimulai dengan bullet seperti mockup."""
+    ind = CameraIndicator(build_theme())
+    qtbot.addWidget(ind)
+    ind.set_state(CameraState.ACTIVE)
+    ind.set_fps(30.0)
+    assert ind.label == "• KAMERA AKTIF   30 FPS"
+
+    ind.set_fps(0.0)
+    assert ind.label == "• KAMERA AKTIF"
+
+    ind.set_state(CameraState.OFF)
+    assert ind.label == "• KAMERA MATI"
+
+    ind.set_state(CameraState.PAUSED)
+    assert ind.label == "• KAMERA JEDA"
+
+    ind.set_state(CameraState.ERROR)
+    assert ind.label == "• KAMERA ERROR"
+
+
+def test_hint_bar_right_is_non_gestur_when_camera_active(qtbot: Any) -> None:
+    """Saat kamera aktif, hint kanan bukan duplikasi status kamera (sudah ada di pill)."""
+    bar = HintBar(build_theme())
+    qtbot.addWidget(bar)
+    bar.set_right("SEMUA AKSI ADA JALAN NON-GESTUR")
+    assert bar.right_text == "SEMUA AKSI ADA JALAN NON-GESTUR"
+
+    bar.set_right("KAMERA JEDA · CTRL+ALT+G")
+    assert bar.right_text == "KAMERA JEDA · CTRL+ALT+G"
+
+
+def test_provider_dropdown_uses_full_display_names(qtbot: Any) -> None:
+    """Dropdown penyedia harus menampilkan nama lengkap seperti mockup 01."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+    items = [dialog.provider_dropdown.itemText(i) for i in range(dialog.provider_dropdown.count())]
+    assert items == ["Google Gemini", "Ollama", "Claude", "ChatGPT"]
+    # Default terpilih Gemini
+    assert dialog.provider_dropdown.currentText() == "Google Gemini"
+    assert dialog.note.text() == "Penyedia aktif · Gemini API"
+    dialog.close()
+
+
+def test_provider_dropdown_switches_note_and_placeholder(qtbot: Any) -> None:
+    """Pindah penyedia di dropdown memperbarui note + placeholder kunci."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+
+    dialog.provider_dropdown.setCurrentText("Ollama")
+    assert dialog.provider_dropdown.currentText() == "Ollama"
+    assert dialog.note.text() == "Ollama: alamat server · API key opsional"
+    assert dialog.url.isEnabled()
+
+    dialog.provider_dropdown.setCurrentText("Claude")
+    assert dialog.note.text() == "Penyedia aktif · Claude API"
+    assert not dialog.url.isEnabled()
+    assert dialog.key.placeholderText() == "Masukkan key Claude API"
+
+    dialog.provider_dropdown.setCurrentText("ChatGPT")
+    assert dialog.note.text() == "Penyedia aktif · ChatGPT API"
+    assert dialog.key.placeholderText() == "Masukkan key ChatGPT API"
+
+    dialog.close()
+
+
+def test_provider_dropdown_items_have_brand_icons(qtbot: Any) -> None:
+    """Setiap item dropdown penyedia harus punya ikon merek yang terrender."""
+    dialog = AgentSettingsDialog(AgentSettings(), CredentialStore(), theme=build_theme())
+    qtbot.addWidget(dialog)
+    expected = {
+        "Google Gemini": IconKind.PROVIDER_GEMINI,
+        "Ollama": IconKind.PROVIDER_OLLAMA,
+        "Claude": IconKind.PROVIDER_CLAUDE,
+        "ChatGPT": IconKind.PROVIDER_CHATGPT,
+    }
+    for index in range(dialog.provider_dropdown.count()):
+        text = dialog.provider_dropdown.itemText(index)
+        icon = dialog.provider_dropdown.itemIcon(index)
+        assert not icon.isNull(), text
+        pixmap = icon.pixmap(QSize(20, 20))
+        image = pixmap.toImage()
+        opaque = [
+            (x, y)
+            for x in range(image.width())
+            for y in range(image.height())
+            if image.pixelColor(x, y).alpha() > 0
+        ]
+        assert opaque, text
+        assert expected[text] is not None
+    dialog.close()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        IconKind.PROVIDER_GEMINI,
+        IconKind.PROVIDER_OLLAMA,
+        IconKind.PROVIDER_CLAUDE,
+        IconKind.PROVIDER_CHATGPT,
+    ],
+)
+def test_provider_icon_renders_pixels(kind: IconKind) -> None:
     pixmap = icon_pixmap(kind, QColor("#6FE5D6"), size=20)
     assert not pixmap.isNull()
     image = pixmap.toImage()

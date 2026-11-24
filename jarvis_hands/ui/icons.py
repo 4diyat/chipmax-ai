@@ -37,6 +37,10 @@ class IconKind(StrEnum):
     TRASH = "trash"
     CLOSE = "close"
     BLOOM = "bloom"
+    PROVIDER_GEMINI = "provider-gemini"
+    PROVIDER_OLLAMA = "provider-ollama"
+    PROVIDER_CLAUDE = "provider-claude"
+    PROVIDER_CHATGPT = "provider-chatgpt"
 
 
 def paint_icon(
@@ -229,6 +233,40 @@ def _bloom(painter: QPainter, color: QColor) -> None:
         painter.restore()
 
 
+def _provider_gemini(painter: QPainter, color: QColor) -> None:
+    """Simbol abstrak Gemini: bintang empat sudut dengan titik tengah."""
+    center = QPointF(12, 12)
+    painter.drawEllipse(center, 1.4, 1.4)
+    for dx, dy in ((-5.2, 0.0), (5.2, 0.0), (0.0, -5.2), (0.0, 5.2)):
+        painter.drawLine(center, QPointF(12 + dx, 12 + dy))
+
+
+def _provider_ollama(painter: QPainter, color: QColor) -> None:
+    """Simbol abstrak Ollama: bundar lunak seperti benang bola."""
+    painter.drawEllipse(QPointF(12, 12), 6.0, 6.0)
+    painter.drawEllipse(QPointF(9.0, 9.0), 2.2, 2.2)
+    painter.drawEllipse(QPointF(15.0, 9.0), 1.6, 1.6)
+
+
+def _provider_claude(painter: QPainter, color: QColor) -> None:
+    """Simbol abstrak Claude: garis vertikal tirus seperti balok teks."""
+    painter.drawRoundedRect(QRectF(8.0, 5.0, 3.0, 14.0), 1.0, 1.0)
+    painter.drawRoundedRect(QRectF(13.0, 9.0, 3.0, 10.0), 1.0, 1.0)
+
+
+def _provider_chatgpt(painter: QPainter, color: QColor) -> None:
+    """Simbol abstrak ChatGPT: balon ucak dengan sudut di kanan bawah."""
+    path = QPainterPath()
+    path.moveTo(4.0, 6.0)
+    path.lineTo(16.0, 6.0)
+    path.lineTo(20.0, 10.0)
+    path.lineTo(20.0, 18.0)
+    path.lineTo(4.0, 18.0)
+    path.closeSubpath()
+    painter.drawPath(path)
+    painter.drawEllipse(QPointF(12, 12), 2.6, 2.6)
+
+
 _DRAW = {
     IconKind.GEAR: _gear,
     IconKind.DISPLAY: _display,
@@ -240,4 +278,8 @@ _DRAW = {
     IconKind.TRASH: _trash,
     IconKind.CLOSE: _close,
     IconKind.BLOOM: _bloom,
+    IconKind.PROVIDER_GEMINI: _provider_gemini,
+    IconKind.PROVIDER_OLLAMA: _provider_ollama,
+    IconKind.PROVIDER_CLAUDE: _provider_claude,
+    IconKind.PROVIDER_CHATGPT: _provider_chatgpt,
 }

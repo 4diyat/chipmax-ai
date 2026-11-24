@@ -168,7 +168,7 @@ class Metrics:
     """Metrik tetap dari spesifikasi mockup (piksel logis)."""
 
     ring_size: int = 440
-    ring_band: int = 20
+    ring_band: int = 40
     ring_ticks: int = 48
     orb_size: int = 112
     cursor_size: int = 28

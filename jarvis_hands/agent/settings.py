@@ -32,6 +32,27 @@ LABELS = {
     Provider.CLAUDE: "Claude",
     Provider.CHATGPT: "ChatGPT",
 }
+#: Nama tampilan lengkap untuk dropdown penyedia (mockup 01).
+DISPLAY = {
+    Provider.GEMINI: "Google Gemini",
+    Provider.OLLAMA: "Ollama",
+    Provider.CLAUDE: "Claude",
+    Provider.CHATGPT: "ChatGPT",
+}
+#: Baris keterangan yang ditampilkan di bawah dropdown penyedia.
+PROVIDER_NOTES = {
+    Provider.GEMINI: "Penyedia aktif · Gemini API",
+    Provider.OLLAMA: "Ollama: alamat server · API key opsional",
+    Provider.CLAUDE: "Penyedia aktif · Claude API",
+    Provider.CHATGPT: "Penyedia aktif · ChatGPT API",
+}
+#: Placeholder kolom kunci API per penyedia.
+KEY_PLACEHOLDERS = {
+    Provider.GEMINI: "Masukkan key Gemini API",
+    Provider.OLLAMA: "API key opsional untuk Ollama lokal",
+    Provider.CLAUDE: "Masukkan key Claude API",
+    Provider.CHATGPT: "Masukkan key ChatGPT API",
+}
 DEFAULT_MODELS = {
     Provider.GEMINI: "gemini-3.8-flash",
     Provider.OLLAMA: "llama3.2",

@@ -127,6 +127,9 @@ class CameraConfig:
     analysis_scale: float = 1.0
     analysis_fps: int = 30
     max_cpu_percent: float = 25.0
+    #: Akselerator model pelacakan tangan: ``"auto"`` (coba GPU dulu, fallback
+    #: CPU), ``"gpu"``, atau ``"cpu"``.
+    delegate: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -153,6 +156,9 @@ class GestureThresholds:
     clap_min_speed_px_s: float = 600.0
     explode_min_speed_px_s: float = 800.0
     gesture_cooldown_ms: int = 400
+    swipe_min_px: float = 100.0
+    swipe_max_ms: int = 500
+    fist_hold_ms: int = 400
 
 
 @dataclass(frozen=True)
@@ -209,6 +215,7 @@ class AppConfig:
                 "analysis_scale": self.camera.analysis_scale,
                 "analysis_fps": self.camera.analysis_fps,
                 "max_cpu_percent": self.camera.max_cpu_percent,
+                "delegate": self.camera.delegate,
             },
             "gestures": {
                 "pinch_close": self.gestures.pinch_close,
@@ -226,6 +233,9 @@ class AppConfig:
                 "clap_min_speed_px_s": self.gestures.clap_min_speed_px_s,
                 "explode_min_speed_px_s": self.gestures.explode_min_speed_px_s,
                 "gesture_cooldown_ms": self.gestures.gesture_cooldown_ms,
+                "swipe_min_px": self.gestures.swipe_min_px,
+                "swipe_max_ms": self.gestures.swipe_max_ms,
+                "fist_hold_ms": self.gestures.fist_hold_ms,
             },
             "cursor": {
                 "one_euro_min_cutoff": self.cursor.one_euro_min_cutoff,
@@ -293,6 +303,7 @@ class AppConfig:
                     minimum=5.0,
                     maximum=100.0,
                 ),
+                delegate=_str(camera, "delegate", "auto", "camera.delegate"),
             ),
             gestures=GestureThresholds(
                 pinch_close=pinch_close,
@@ -341,6 +352,19 @@ class AppConfig:
                     400,
                     "gestures.gesture_cooldown_ms",
                     minimum=0,
+                ),
+                swipe_min_px=_float(
+                    gestures,
+                    "swipe_min_px",
+                    100.0,
+                    "gestures.swipe_min_px",
+                    minimum=0.0,
+                ),
+                swipe_max_ms=_int(
+                    gestures, "swipe_max_ms", 500, "gestures.swipe_max_ms", minimum=1
+                ),
+                fist_hold_ms=_int(
+                    gestures, "fist_hold_ms", 400, "gestures.fist_hold_ms", minimum=1
                 ),
             ),
             cursor=CursorConfig(

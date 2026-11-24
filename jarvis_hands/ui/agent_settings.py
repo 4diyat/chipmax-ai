@@ -9,7 +9,6 @@ from typing import Any
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
-    QButtonGroup,
     QComboBox,
     QDialog,
     QFrame,
@@ -26,8 +25,10 @@ from PySide6.QtWidgets import (
 from jarvis_hands.agent.bridge import AgentBridge
 from jarvis_hands.agent.settings import (
     DEFAULT_MODELS,
+    DISPLAY,
     ENV_KEYS,
-    LABELS,
+    KEY_PLACEHOLDERS,
+    PROVIDER_NOTES,
     AgentSettings,
     CredentialStore,
     Provider,
@@ -36,7 +37,11 @@ from jarvis_hands.agent.settings import (
     save_settings,
 )
 from jarvis_hands.ui.accessibility import enforce_min_targets
-from jarvis_hands.ui.icons import IconGlyph, IconKind, icon_icon
+from jarvis_hands.ui.icons import (
+    IconGlyph,
+    IconKind,
+    icon_icon,
+)
 from jarvis_hands.ui.qss import SETTINGS_QSS, dialog_qss
 from jarvis_hands.ui.tokens import (
     FONT,
@@ -49,6 +54,14 @@ from jarvis_hands.ui.tokens import (
 )
 
 __all__ = ["SETTINGS_QSS", "AgentSettingsDialog", "AgentSettingsPage"]
+
+#: Ikon merek per penyedia yang ditampilkan di samping nama di dropdown.
+PROVIDER_ICONS: dict[Provider, IconKind] = {
+    Provider.GEMINI: IconKind.PROVIDER_GEMINI,
+    Provider.OLLAMA: IconKind.PROVIDER_OLLAMA,
+    Provider.CLAUDE: IconKind.PROVIDER_CLAUDE,
+    Provider.CHATGPT: IconKind.PROVIDER_CHATGPT,
+}
 
 
 def _rgba(color: QColor, alpha: float) -> str:
@@ -166,22 +179,20 @@ class AgentSettingsPage(QWidget):
         body.addWidget(title)
         body.addWidget(QLabel("Pilih penyedia dan atur kunci API di perangkat ini"))
         body.addWidget(QLabel("JENIS AGEN"))
-        choices = QHBoxLayout()
-        self.buttons = QButtonGroup(self)
-        self._provider_buttons: dict[Provider, QPushButton] = {}
-        for index, provider in enumerate(Provider):
-            button = QPushButton(LABELS[provider])
-            button.setObjectName(f"provider-{provider.value}")
-            button.setMinimumHeight(44)
-            button.setCheckable(True)
-            button.setProperty("provider", True)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            self.buttons.addButton(button, index)
-            self._provider_buttons[provider] = button
-            choices.addWidget(button)
-        self.buttons.idClicked.connect(self._select_provider)
-        body.addLayout(choices)
-        self.note = QLabel("Ollama: alamat server · API key opsional")
+        self.provider_dropdown = QComboBox()
+        self.provider_dropdown.setObjectName("agent-provider")
+        self.provider_dropdown.setAccessibleName("Jenis agen")
+        self.provider_dropdown.setMinimumHeight(44)
+        self.provider_dropdown.setCursor(Qt.CursorShape.PointingHandCursor)
+        for provider in Provider:
+            self.provider_dropdown.addItem(DISPLAY[provider], provider.value)
+            self.provider_dropdown.setItemIcon(
+                self.provider_dropdown.count() - 1,
+                icon_icon(PROVIDER_ICONS[provider], self._theme.palette.accent, size=18),
+            )
+        self.provider_dropdown.currentIndexChanged.connect(self._select_provider)
+        body.addWidget(self.provider_dropdown)
+        self.note = QLabel(PROVIDER_NOTES[self._draft.provider])
         self.note.setWordWrap(True)
         body.addWidget(self.note)
         # Grid label/kolom menggantikan QFormLayout: label mono berdiri di atas
@@ -313,12 +324,13 @@ class AgentSettingsPage(QWidget):
     # ------------------------------------------------------------------ draft
 
     def _select_provider(self, index: int) -> None:
-        provider = list(Provider)[index]
+        provider_value = self.provider_dropdown.itemData(index)
+        provider = Provider(provider_value)
         if hasattr(self, "model") and self.model.currentText():
             self._draft.models[self._draft.provider] = self.model.currentText().strip()
             self._draft.ollama_url = self.url.text().strip() or self._draft.ollama_url
         self._draft.provider = provider
-        self._provider_buttons[provider].setChecked(True)
+        self.provider_dropdown.setCurrentIndex(index)
         self.model.clear()
         self.model.addItem(self._draft.models[provider])
         if DEFAULT_MODELS[provider] != self._draft.models[provider]:
@@ -329,7 +341,9 @@ class AgentSettingsPage(QWidget):
         self.url.setEnabled(is_ollama)
         for row in self._url_rows:
             row.setVisible(is_ollama)
+        self.note.setText(PROVIDER_NOTES[provider])
         self.key.clear()
+        self.key.setPlaceholderText(KEY_PLACEHOLDERS[provider])
         self.eye.setChecked(False)
         self.test_status.setText("")
         self.test_badge.set_state("BELUM DIUJI")
@@ -436,8 +450,7 @@ class AgentSettingsPage(QWidget):
         self.test_badge.set_state("GAGAL")
 
     def _test_busy(self, busy: bool) -> None:
-        for button in self._provider_buttons.values():
-            button.setEnabled(not busy)
+        self.provider_dropdown.setEnabled(not busy)
         self.save_button.setEnabled(not busy)
         self.test_button.setEnabled(not busy)
         self.delete_button.setEnabled(not busy)

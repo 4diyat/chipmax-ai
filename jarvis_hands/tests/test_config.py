@@ -173,29 +173,33 @@ def test_camera_analysis_defaults_and_round_trip() -> None:
     config = AppConfig.default()
     assert config.camera.analysis_fps == 30
     assert config.camera.max_cpu_percent == 25.0
+    assert config.camera.delegate == "auto"
 
     payload = config.to_dict()
     payload["camera"]["analysis_fps"] = 15
     payload["camera"]["max_cpu_percent"] = 40.0
+    payload["camera"]["delegate"] = "gpu"
     rebuilt = AppConfig.from_dict(payload)
     assert rebuilt.camera.analysis_fps == 15
     assert rebuilt.camera.max_cpu_percent == 40.0
+    assert rebuilt.camera.delegate == "gpu"
 
 
-@pytest.mark.parametrize(
-    ("key", "value"),
-    [
-        ("analysis_fps", 0),
-        ("analysis_fps", 121),
-        ("max_cpu_percent", 0.0),
-        ("max_cpu_percent", 101.0),
-    ],
-)
-def test_camera_analysis_rejects_out_of_range(key: str, value: object) -> None:
+def test_camera_delegate_round_trip() -> None:
+    for delegate in ("auto", "gpu", "cpu"):
+        payload = AppConfig.default().to_dict()
+        payload["camera"]["delegate"] = delegate
+        rebuilt = AppConfig.from_dict(payload)
+        assert rebuilt.camera.delegate == delegate
+
+
+def test_camera_delegate_invalid_defaults_to_auto() -> None:
+    # Nilai di luar daftar valid diterima sebagai string tapi HandTracker
+    # akan menormalkan ke "auto". Pada tingkat config, hanya disimpan apa adanya.
     payload = AppConfig.default().to_dict()
-    payload["camera"][key] = value
-    with pytest.raises(ConfigError):
-        AppConfig.from_dict(payload)
+    payload["camera"]["delegate"] = "cuda"
+    rebuilt = AppConfig.from_dict(payload)
+    assert rebuilt.camera.delegate == "cuda"
 
 
 def test_gesture_thresholds_defaults_and_round_trip() -> None:
@@ -225,6 +229,22 @@ def test_gesture_thresholds_defaults_and_round_trip() -> None:
     assert rebuilt.gestures.clap_min_speed_px_s == 750.0
     assert rebuilt.gestures.explode_min_speed_px_s == 900.0
     assert rebuilt.gestures.gesture_cooldown_ms == 250
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("analysis_fps", 0),
+        ("analysis_fps", 121),
+        ("max_cpu_percent", 0.0),
+        ("max_cpu_percent", 101.0),
+    ],
+)
+def test_camera_analysis_rejects_out_of_range(key: str, value: object) -> None:
+    payload = AppConfig.default().to_dict()
+    payload["camera"][key] = value
+    with pytest.raises(ConfigError):
+        AppConfig.from_dict(payload)
 
 
 @pytest.mark.parametrize(

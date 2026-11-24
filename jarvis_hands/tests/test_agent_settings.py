@@ -165,7 +165,7 @@ def test_dialog_saves_separate_provider_keys(qtbot: Any, tmp_path: Path) -> None
     assert store.keys[Provider.GEMINI] == "gemini-secret"
     assert "gemini-secret" not in path.read_text(encoding="utf-8")
     assert not dialog.key.text()
-    qtbot.mouseClick(dialog._provider_buttons[Provider.CLAUDE], Qt.MouseButton.LeftButton)
+    dialog.provider_dropdown.setCurrentText("Claude")
     dialog.model.setCurrentText("claude-user-model")
     dialog.key.setText("claude-secret")
     qtbot.mouseClick(dialog.save_button, Qt.MouseButton.LeftButton)
@@ -174,7 +174,7 @@ def test_dialog_saves_separate_provider_keys(qtbot: Any, tmp_path: Path) -> None
     assert saved.provider is Provider.CLAUDE
     assert saved.models[Provider.CLAUDE] == "claude-user-model"
     assert "claude-secret" not in path.read_text(encoding="utf-8")
-    qtbot.mouseClick(dialog._provider_buttons[Provider.OLLAMA], Qt.MouseButton.LeftButton)
+    dialog.provider_dropdown.setCurrentText("Ollama")
     assert dialog.url.isEnabled()
     assert not dialog.key.text()
     dialog.close()
@@ -187,7 +187,7 @@ def test_connection_test_calls_selected_provider(
     dialog = AgentSettingsDialog(AgentSettings(), store, path=tmp_path / "agent.json")
     qtbot.addWidget(dialog)
     dialog.show()
-    qtbot.mouseClick(dialog._provider_buttons[Provider.OLLAMA], Qt.MouseButton.LeftButton)
+    dialog.provider_dropdown.setCurrentText("Ollama")
     transport = Transport(json.dumps({"message": {"content": "OK"}}).encode())
     monkeypatch.setattr(providers, "build_opener", lambda *handlers: transport)
     qtbot.mouseClick(dialog.test_button, Qt.MouseButton.LeftButton)
@@ -214,7 +214,7 @@ def test_control_settings_apply_and_reload(
     qtbot.mouseClick(control.settings_button, Qt.MouseButton.LeftButton)
     dialog = control._settings_dialog
     assert dialog is not None
-    qtbot.mouseClick(dialog._provider_buttons[Provider.CHATGPT], Qt.MouseButton.LeftButton)
+    dialog.provider_dropdown.setCurrentText("ChatGPT")
     dialog.model.setCurrentText("gpt-user-model")
     dialog.key.setText("openai-key-test")
     qtbot.mouseClick(dialog.save_button, Qt.MouseButton.LeftButton)

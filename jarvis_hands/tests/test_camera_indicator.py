@@ -11,7 +11,7 @@ from jarvis_hands.ui.tokens import build_theme
 def test_default_state_is_off(qapp: object) -> None:
     indicator = CameraIndicator()
     assert indicator.state is CameraState.OFF
-    assert indicator.label == "KAMERA MATI"
+    assert indicator.label == "• KAMERA MATI"
     assert indicator.accessibleName() == "Indikator kamera"
     indicator.close()
 
@@ -22,13 +22,13 @@ def test_state_labels_and_signal(qapp: object) -> None:
     indicator.state_changed.connect(states.append)
 
     indicator.set_state(CameraState.ACTIVE)
-    assert indicator.label == "KAMERA AKTIF"
+    assert indicator.label == "• KAMERA AKTIF"
     indicator.set_state(CameraState.PAUSED)
-    assert indicator.label == "KAMERA JEDA"
+    assert indicator.label == "• KAMERA JEDA"
     indicator.set_state(CameraState.ERROR)
-    assert indicator.label == "KAMERA ERROR"
+    assert indicator.label == "• KAMERA ERROR"
     indicator.set_state(CameraState.OFF)
-    assert indicator.label == "KAMERA MATI"
+    assert indicator.label == "• KAMERA MATI"
     assert states == [
         CameraState.ACTIVE,
         CameraState.PAUSED,
@@ -41,11 +41,11 @@ def test_state_labels_and_signal(qapp: object) -> None:
 def test_fps_only_shown_when_active(qapp: object) -> None:
     indicator = CameraIndicator()
     indicator.set_fps(29.6)
-    assert indicator.label == "KAMERA MATI"
+    assert indicator.label == "• KAMERA MATI"
     indicator.set_active(True)
-    assert indicator.label == "KAMERA AKTIF  30 FPS"
+    assert indicator.label == "• KAMERA AKTIF   30 FPS"
     indicator.set_paused(True)
-    assert indicator.label == "KAMERA JEDA"
+    assert indicator.label == "• KAMERA JEDA"
     indicator.close()
 
 
