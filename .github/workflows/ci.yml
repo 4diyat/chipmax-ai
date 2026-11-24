@@ -58,8 +58,10 @@ jobs:
   windows-smoke:
     name: pytest (Windows, py3.12)
     runs-on: windows-latest
+    timeout-minutes: 15
     env:
       QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -73,4 +75,5 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Pytest
-        run: uv run pytest -q
+        timeout-minutes: 10
+        run: uv run python -u -m pytest -vv --color=no -o faulthandler_timeout=60
