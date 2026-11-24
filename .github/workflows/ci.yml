@@ -76,4 +76,4 @@ jobs:
 
       - name: Pytest
         timeout-minutes: 8
-        run: uv run python tools/windows_pytest.py
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest

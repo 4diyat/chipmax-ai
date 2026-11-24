@@ -1,57 +1,52 @@
-"""Jalankan pytest dengan batas waktu dan diagnostik yang terlihat di CI Windows."""
+"""Plugin pytest: laporkan tes Windows yang gagal atau terhenti melalui CI."""
 
 from __future__ import annotations
 
-import subprocess
+import os
 import sys
-import tempfile
-from pathlib import Path
+import threading
+import traceback
+from typing import Any
 
-TIMEOUT_SECONDS = 300
+import pytest
+
+TEST_TIMEOUT_SECONDS = 60
 MAX_ANNOTATION_CHARS = 25000
 
 
-def main() -> int:
-    command = [
-        sys.executable,
-        "-u",
-        "-m",
-        "pytest",
-        "-vv",
-        "--color=no",
-        "-o",
-        "faulthandler_timeout=60",
-    ]
-    with tempfile.TemporaryDirectory(prefix="jarvis-pytest-") as tmp:
-        log_path = Path(tmp) / "pytest.log"
-        timed_out = False
-        with log_path.open("wb") as log:
-            try:
-                completed = subprocess.run(
-                    command,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    timeout=TIMEOUT_SECONDS,
-                    check=False,
-                )
-                code = completed.returncode
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                code = 1
-        output = log_path.read_text(encoding="utf-8", errors="replace")
-    print(output, end="", flush=True)
-    if code:
-        reason = (
-            f"pytest exceeded {TIMEOUT_SECONDS} seconds" if timed_out else f"pytest exited {code}"
-        )
-        # GitHub annotations are accessible through the checks API even when job logs
-        # are unavailable. Escape workflow command data and keep it below its limit.
-        detail = output[-MAX_ANNOTATION_CHARS:]
-        message = f"{reason}\nLast pytest output:\n{detail}"
-        message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-        print(f"::error title=Windows pytest diagnostics::{message}", flush=True)
-    return code
+def _annotation(title: str, detail: str) -> None:
+    message = detail[-MAX_ANNOTATION_CHARS:]
+    message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::error title={title}::{message}", file=sys.__stdout__, flush=True)
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def _timeout(nodeid: str) -> None:
+    stacks = []
+    for thread_id, frame in sys._current_frames().items():
+        stacks.append(f"Thread {thread_id}:\n{''.join(traceback.format_stack(frame))}")
+    _annotation(
+        "Windows pytest timeout",
+        f"Test exceeded {TEST_TIMEOUT_SECONDS} seconds: {nodeid}\n" + "\n".join(stacks),
+    )
+    # pytest cannot safely resume after a blocked test. Force a nonzero exit even
+    # when a Qt worker or modal dialog would otherwise keep the interpreter alive.
+    os._exit(1)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item: Any) -> Any:
+    timer = threading.Timer(TEST_TIMEOUT_SECONDS, _timeout, args=(item.nodeid,))
+    timer.daemon = True
+    timer.start()
+    try:
+        yield
+    finally:
+        timer.cancel()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: Any, call: Any) -> Any:
+    outcome = yield
+    report = outcome.get_result()
+    if report.failed:
+        _annotation("Windows pytest failure", f"{report.nodeid} ({report.when})\n{report.longrepr}")

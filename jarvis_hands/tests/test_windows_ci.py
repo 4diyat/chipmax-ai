@@ -1,37 +1,29 @@
-"""Diagnostik CI tetap melaporkan kegagalan dan batas waktu pytest."""
+"""Diagnostik CI melaporkan kegagalan dan tes yang macet."""
 
 from __future__ import annotations
 
-import subprocess
-from typing import Any
+import io
+import os
+import sys
 
 import pytest
 from tools import windows_pytest
 
 
-@pytest.mark.parametrize("exit_code", [0, 1, 5])
-def test_runner_reports_result(
-    monkeypatch: pytest.MonkeyPatch, capsys: Any, exit_code: int
-) -> None:
-    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        kwargs["stdout"].write(b"test_example.py::test_one FAILED\n")
-        assert kwargs["timeout"] == windows_pytest.TIMEOUT_SECONDS
-        return subprocess.CompletedProcess(command, exit_code)
-
-    monkeypatch.setattr(subprocess, "run", run)
-    assert windows_pytest.main() == exit_code
-    output = capsys.readouterr().out
-    assert "test_example.py::test_one FAILED" in output
-    assert ("::error title=Windows pytest diagnostics::" in output) == (exit_code != 0)
+def test_annotation_escapes_workflow_command_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    output = io.StringIO()
+    monkeypatch.setattr(sys, "__stdout__", output)
+    windows_pytest._annotation("Test", "one%two\r\nthree")
+    assert output.getvalue() == "::error title=Test::one%25two%0D%0Athree\n"
 
 
-def test_runner_reports_timeout(monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
-    def run(command: list[str], **kwargs: Any) -> None:
-        kwargs["stdout"].write(b"test_example.py::test_stuck ")
-        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
-
-    monkeypatch.setattr(subprocess, "run", run)
-    assert windows_pytest.main() == 1
-    output = capsys.readouterr().out
-    assert "pytest exceeded 300 seconds" in output
-    assert "test_example.py::test_stuck" in output
+def test_timeout_reports_test_and_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    output = io.StringIO()
+    codes: list[int] = []
+    monkeypatch.setattr(sys, "__stdout__", output)
+    monkeypatch.setattr(os, "_exit", codes.append)
+    windows_pytest._timeout("test_example.py::test_stuck")
+    assert "test_example.py::test_stuck" in output.getvalue()
+    assert "Test exceeded 60 seconds" in output.getvalue()
+    assert "Thread" in output.getvalue()
+    assert codes == [1]
