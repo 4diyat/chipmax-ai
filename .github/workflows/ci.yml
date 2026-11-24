@@ -101,12 +101,20 @@ jobs:
           jarvis_hands/tests/test_gemini.py
           -k "real_request_contract or invalid_prompt or model_cannot or key_required"
 
-      - name: Tes Gemini error dan respons
+      - name: Tes Gemini error HTTP
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py::test_error_codes_never_expose_key
+
+      - name: Tes Gemini redirect
+        timeout-minutes: 3
+        run: uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest jarvis_hands/tests/test_gemini.py::test_redirects_rejected
+
+      - name: Tes Gemini respons
         timeout-minutes: 3
         run: >-
           uv run python -u -m pytest -vv -s --color=no -p tools.windows_pytest
           jarvis_hands/tests/test_gemini.py
-          -k "error_codes or redirects or invalid_response or thoughts or max_token"
+          -k "invalid_response or thoughts or max_token"
 
       - name: Tes Gemini pembaruan UI
         timeout-minutes: 3
